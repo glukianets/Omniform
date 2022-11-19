@@ -159,11 +159,21 @@ extension FieldPresenting where Self == FieldPresentations.Toggle {
 // MARK: - PickerPresentation
 
 extension FieldPresentations {
-    public enum PickerStyle: Hashable {
-        case auto, inline, segments, selection, wheel
+    public struct PickerStyle: Hashable {
+        private enum Represenation: Hashable {
+            case auto, inline, segments, selection, wheel, menu
+        }
+
+        public static let auto = Self(representation: .auto)
+        public static let inline = Self(representation: .inline)
+        public static let segments = Self(representation: .segments)
+        public static let selection = Self(representation: .selection)
+        public static let wheel = Self(representation: .wheel)
 
         @available(iOS 14.0, *)
-        case menu
+        public static let menu = Self(representation: .menu)
+    
+        private let representation: Represenation
     }
 
     public struct Picker<Value>: FieldPresenting where Value: Hashable {
@@ -326,8 +336,16 @@ extension FieldPresenting where Value: BinaryInteger, Value.Stride: BinaryIntege
 // MARK: - ButtonPresentation
 
 extension FieldPresentations {
-    public enum ButtonRole {
-        case destructive, regular
+    public struct ButtonRole {
+        private enum Representation {
+            case destructive, regular
+        }
+        
+        public static let destructive = Self(representation: .destructive)
+        
+        public static let regular = Self(representation: .regular)
+        
+        private let representation: Representation
     }
 
     public struct Button: FieldPresenting {
