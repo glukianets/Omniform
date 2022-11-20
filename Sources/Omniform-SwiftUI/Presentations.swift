@@ -63,10 +63,10 @@ extension FieldPresentations.Group: SwiftUIFormPresenting {
     
     public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
         let presentation = FieldPresentations.GroupPresentationTrampoline<FormModel> { _ in
-            Group {
-                switch self.kind {
-                case .section(let caption):
-                    SectionView(model: model, caption: caption).erased
+            SwiftUI.Group {
+                switch self {
+                case .section(let section):
+                    SectionView(model: model, caption: section.caption).erased
                 case .screen:
                     NavigationLinkView(model: model).erased
                 case .inline:
@@ -83,8 +83,11 @@ extension FieldPresentations.Group: SwiftUIFormPresenting {
 
 extension FieldPresentations.Nested: SwiftUIFieldPresenting where Wrapped: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> Wrapped.Body {
-        let subBinding = binding.map(keyPath: self.keyPath)
-        return self.wrapped.body(for: field, binding: subBinding)
+        switch self {
+        case .subscript(let representation):
+            let subBinding = binding.map(keyPath: representation.keyPath)
+            return representation.wrapped.body(for: field, binding: subBinding)
+        }
     }
 }
 
@@ -100,13 +103,16 @@ extension FieldPresentations.None: SwiftUIFieldPresenting {
 
 extension FieldPresentations.Nullified: SwiftUIFieldPresenting where Presentation: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        let binding = binding.map {
-            $0._optional ?? nilValue
-        } set: {
-            $0 == nilValue ? .some(nil) : .some($0)
+        switch self {
+        case .matching(let content):
+            let binding = binding.map {
+                $0._optional ?? content.nilValue
+            } set: {
+                $0 == content.nilValue ? .some(nil) : .some($0)
+            }
+            
+            return content.wrapped.body(for: field, binding: binding).erased
         }
-        
-        return wrapped.body(for: field, binding: binding).erased
     }
 }
 
@@ -143,8 +149,11 @@ extension FieldPresentations.Documented: SwiftUIFieldPresenting where Presentati
     }
     
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        let content = self.wrapped.body(for: field, binding: binding)
-        return DocumentationView(documentation: self.documentation, content: content.erased).erased
+        switch self {
+        case .docString(let info):
+            let content = info.wrapped.body(for: field, binding: binding)
+            return DocumentationView(documentation: info.documentation, content: content.erased).erased
+        }
     }
 }
 
@@ -184,10 +193,11 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         let binding = binding.map { $0.description } set: { Value($0) }
         
-        return Group {
-            if self.isSecure {
+        return SwiftUI.Group {
+            switch self {
+            case .secure:
                 SwiftUI.SecureField<Text>(field.displayName, text: binding.forSwiftUI)
-            } else {
+            case .regular:
                 SwiftUI.TextField<Text>(field.displayName, text: binding.forSwiftUI)
                     .textContentType(nil)
                     .keyboardType(.asciiCapable)
@@ -295,7 +305,7 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
                 }
             }
 
-            return Group {
+            return SwiftUI.Group {
                 switch self.presentation.style {
                 case .auto:
                     picker.pickerStyle(.automatic)
@@ -355,14 +365,19 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
 
 extension FieldPresentations.Slider: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        SwiftUI.Slider(
-            value: binding.forSwiftUI,
-            in: range,
-            step: step ?? range.lowerBound.distance(to: range.upperBound) / 100,
-            label: { Text(field.displayName) },
-            minimumValueLabel: { Text(String(format: "%.2f", Double(range.lowerBound))) },
-            maximumValueLabel: { Text(String(format: "%.2f", Double(range.upperBound))) }
-        ).erased
+        SwiftUI.Group {
+            switch self {
+            case .regular(let content):
+                SwiftUI.Slider(
+                    value: binding.forSwiftUI,
+                    in: content.range,
+                    step: content.step ?? content.range.lowerBound.distance(to: content.range.upperBound) / 100,
+                    label: { Text(field.displayName) },
+                    minimumValueLabel: { Text(String(format: "%.2f", Double(content.range.lowerBound))) },
+                    maximumValueLabel: { Text(String(format: "%.2f", Double(content.range.upperBound))) }
+                )
+            }
+        }.erased
     }
 }
 
@@ -370,12 +385,17 @@ extension FieldPresentations.Slider: SwiftUIFieldPresenting {
 
 extension FieldPresentations.Stepper: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        SwiftUI.Stepper(value: binding.forSwiftUI, in: self.range, step: self.step) {
-            HStack {
-                Text(field.displayName)
-                Spacer()
-                Text(String(describing: binding.value))
-            }.padding(.trailing)
+        SwiftUI.Group {
+            switch self {
+            case .regular(let content):
+                SwiftUI.Stepper(value: binding.forSwiftUI, in: content.range, step: content.step) {
+                    HStack {
+                        Text(field.displayName)
+                        Spacer()
+                        Text(String(describing: binding.value))
+                    }.padding(.trailing)
+                }
+            }
         }.erased
     }
 }
@@ -384,14 +404,21 @@ extension FieldPresentations.Stepper: SwiftUIFieldPresenting {
 
 extension FieldPresentations.Button: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        SwiftUI.Button(action: binding.value) {
-            switch self.role {
-            case .regular:
-                Text(field.displayName)
-            case .destructive:
-                Text(field.displayName)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.red)
+        SwiftUI.Group {
+            switch self {
+            case .regular(let content):
+                SwiftUI.Button(action: binding.value) {
+                    switch content.role {
+                    case .regular:
+                        Text(field.displayName)
+                    case .destructive:
+                        Text(field.displayName)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.red)
+                    default:
+                        fatalError("unreachable")
+                    }
+                }
             }
         }.erased
     }
@@ -414,90 +441,42 @@ extension FieldPresentations.DatePickerComponents {
 
 extension FieldPresentations.DatePicker: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        switch (self.range.start, self.range.end) {
-        case (.distantPast, .distantFuture):
-            return SwiftUI.DatePicker(
-                field.displayName,
-                selection: binding.forSwiftUI,
-                displayedComponents: self.components.swiftUI
-            ).erased
-        
-        case (.distantPast, let future):
-            return SwiftUI.DatePicker(
-                field.displayName,
-                selection: binding.forSwiftUI,
-                in: ...future,
-                displayedComponents: self.components.swiftUI
-            ).erased
-            
-        case (let past, .distantFuture):
-            return SwiftUI.DatePicker(
-                field.displayName,
-                selection: binding.forSwiftUI,
-                in: past...,
-                displayedComponents: self.components.swiftUI
-            ).erased
+        SwiftUI.Group {
+            switch self {
+            case .inline(let content):
+                switch (content.interval.start, content.interval.end) {
+                case (.distantPast, .distantFuture):
+                    return SwiftUI.DatePicker(
+                        field.displayName,
+                        selection: binding.forSwiftUI,
+                        displayedComponents: content.components.swiftUI
+                    )
+                
+                case (.distantPast, let future):
+                    return SwiftUI.DatePicker(
+                        field.displayName,
+                        selection: binding.forSwiftUI,
+                        in: ...future,
+                        displayedComponents: content.components.swiftUI
+                    )
+                    
+                case (let past, .distantFuture):
+                    return SwiftUI.DatePicker(
+                        field.displayName,
+                        selection: binding.forSwiftUI,
+                        in: past...,
+                        displayedComponents: content.components.swiftUI
+                    )
 
-        case (let past, let future):
-            return SwiftUI.DatePicker(
-                field.displayName,
-                selection: binding.forSwiftUI,
-                in: past...future,
-                displayedComponents: self.components.swiftUI
-            ).erased
-        }
-    }
-}
-
-// MARK: - URLInputView
-
-private struct URLInputView: View {
-    let field: Metadata
-    let binding: any ValueBinding<URL?>
-    
-    @State
-    var isValid: Bool = true
-    
-    init(fieldInfo: Metadata, binding: some ValueBinding<URL>) {
-        self.field = fieldInfo
-        self.binding = binding.map { $0 } set: { $0 }
-    }
-    
-    init(fieldInfo: Metadata, binding: some ValueBinding<URL?>) {
-        self.field = fieldInfo
-        self.binding = binding
-    }
-    
-    public var body: some View {
-        let binding = binding.map { $0?.description ?? "" } set: {
-            if let url = URL(string: $0.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                self.isValid = true
-                return .some(.some(url))
-            } else {
-                self.isValid = $0.isEmpty
-                return self.isValid ? .some(nil) : nil
+                case (let past, let future):
+                    return SwiftUI.DatePicker(
+                        field.displayName,
+                        selection: binding.forSwiftUI,
+                        in: past...future,
+                        displayedComponents: content.components.swiftUI
+                    )
+                }
             }
-        }
-        
-        return SwiftUI.TextField(self.field.displayName, text: binding.forSwiftUI)
-           .keyboardType(.URL)
-           .textContentType(.URL)
-           .autocapitalization(.none)
-           .disableAutocorrection(true)
-           .foregroundColor(self.isValid ? nil : Color.red)
-        }
-}
-
-extension FieldPresentations.URLInput: SwiftUIFieldPresenting {
-    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        URLInputView(fieldInfo: field, binding: binding)
-            .erased
-    }
-}
-
-extension FieldPresentations.OptionalURLInput: SwiftUIFieldPresenting {
-    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        URLInputView(fieldInfo: field, binding: binding)
-            .erased
+        }.erased
     }
 }

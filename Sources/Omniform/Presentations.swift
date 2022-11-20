@@ -17,37 +17,51 @@ public struct FieldPresentations {
 // MARK: - GroupPresentation
 
 extension FieldPresentations {
-    public enum GroupKind {
-        case section(caption: String?)
-        case screen
-        case inline
-    }
-    
-    public struct Group<Value>: FieldPresenting {
+    public enum Group<Value>: FieldPresenting {
         public typealias Value = Value
-                
-        public var kind: GroupKind
         
-        public init(kind: GroupKind) {
-            self.kind = kind
+        public struct Section {
+            public let caption: String?
+            
+            public init(caption: String?) {
+                self.caption = caption
+            }
         }
+
+        case section(Section)
+        
+        public struct Screen {
+            public init() {
+                // nothing
+            }
+        }
+        
+        case screen(Screen)
+        
+        public struct Inline {
+            public init() {
+                // nothing
+            }
+        }
+        
+        case inline(Inline)
     }
 }
 
 extension FieldPresenting {
     @inlinable
     public static func section<T>(caption: String? = nil) -> Self where Self == FieldPresentations.Group<T> {
-        .init(kind: .section(caption: caption))
+        .section(.init(caption: caption))
     }
 
     @inlinable
     public static func screen<T>() -> Self where Self == FieldPresentations.Group<T> {
-        .init(kind: .screen)
+        .screen(.init())
     }
 
     @inlinable
     public static func inline<T>() -> Self where Self == FieldPresentations.Group<T> {
-        .init(kind: .inline)
+        .inline(.init())
     }
 }
 
@@ -71,16 +85,24 @@ extension FieldPresenting {
 // MARK: - NestedPresentation
 
 extension FieldPresentations {
-    public struct Nested<Value, Wrapped>: FieldPresenting where Wrapped: FieldPresenting {
+    public enum Nested<Value, Wrapped>: FieldPresenting where Wrapped: FieldPresenting {
         public typealias Value = Value
         public typealias Wrapped = Wrapped
         
-        public var keyPath: KeyPath<Value, Wrapped.Value>
-        public var wrapped: Wrapped
+        public struct Subscript {
+            public let wrapped: Wrapped
+            public let keyPath: KeyPath<Value, Wrapped.Value>
+            
+            public init(wrapped: Wrapped, keyPath: KeyPath<Value, Wrapped.Value>) {
+                self.wrapped = wrapped
+                self.keyPath = keyPath
+            }
+        }
+        
+        case `subscript`(Subscript)
        
         public init(wrapping wrapped: Wrapped, keyPath: KeyPath<Value, Wrapped.Value>) {
-            self.wrapped = wrapped
-            self.keyPath = keyPath
+            self = .subscript(Subscript(wrapped: wrapped, keyPath: keyPath))
         }
     }
 }
@@ -105,14 +127,23 @@ extension FieldPresenting {
 // MARK: - InputPresentation
 
 extension FieldPresentations {
-    public struct TextInput<Value>: FieldPresenting where Value: LosslessStringConvertible {
+    public enum TextInput<Value>: FieldPresenting where Value: LosslessStringConvertible {
         public typealias Value = Value
-        
-        public var isSecure: Bool = false
-        
-        public init(secure: Bool = false) {
-            self.isSecure = secure
+       
+        public struct Regular {
+            public init() {
+                // nothing
+            }
         }
+        
+        public struct Secure {
+            public init() {
+                // nothing
+            }
+        }
+        
+        case regular(Regular = .init())
+        case secure(Secure = .init())
     }
 }
 
@@ -123,7 +154,7 @@ extension FieldPresenting where Value: LosslessStringConvertible {
         Self == FieldPresentations.TextInput<T>,
         Value == T
     {
-        .init(secure: secure)
+        secure ? .secure() : .regular()
     }
 }
 
@@ -135,32 +166,36 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
         Value == T,
         T.Wrapped: LosslessStringConvertible
     {
-        .init(wrapped: .init(secure: secure), nilValue: "")
+        .nullifying(secure ? .secure() : .regular(), when: "")
     }
 }
 
 // MARK: - TogglePresentation
 
 extension FieldPresentations {
-    public struct Toggle: FieldPresenting {
+    public enum Toggle: FieldPresenting {
         public typealias Value = Bool
         
-        public init() {
-            // nothing
+        public struct Regular {
+            public init() {
+                // nothing
+            }
         }
+        
+        case regular(Regular = .init())
     }
 }
 
 extension FieldPresenting where Self == FieldPresentations.Toggle {
     @inlinable
-    public static var toggle: Self { .init() }
+    public static var toggle: Self { .regular() }
 }
 
 // MARK: - PickerPresentation
 
 extension FieldPresentations {
-    public struct PickerStyle: Hashable {
-        private enum Represenation: Hashable {
+    public struct PickerStyle: Equatable {
+        private enum Represenation: Equatable {
             case auto, inline, segments, selection, wheel, menu
         }
 
@@ -255,16 +290,20 @@ extension FieldPresenting where Value: Hashable {
 // MARK: - SliderPresentation
 
 extension FieldPresentations {
-    public struct Slider<Value>: FieldPresenting where Value: BinaryFloatingPoint, Value.Stride: BinaryFloatingPoint {
+    public enum Slider<Value>: FieldPresenting where Value: BinaryFloatingPoint, Value.Stride: BinaryFloatingPoint {
         public typealias Value = Value
-        
-        public var range: ClosedRange<Value>
-        public var step: Value.Stride?
-        
-        public init(range: ClosedRange<Value>, step: Value.Stride?) {
-            self.range = range
-            self.step = step
+       
+        public struct Regular {
+            public let range: ClosedRange<Value>
+            public let step: Value.Stride?
+            
+            public init(range: ClosedRange<Value>, step: Value.Stride?) {
+                self.range = range
+                self.step = step
+            }
         }
+
+        case regular(Regular)
     }
 }
 
@@ -277,23 +316,27 @@ extension FieldPresenting where Value: BinaryFloatingPoint, Value.Stride: Binary
         Self == FieldPresentations.Slider<T>,
         Value == T
     {
-        .init(range: range, step: step)
+        .regular(.init(range: range, step: step))
     }
 }
 
 // MARK: - StepperPresentation
 
 extension FieldPresentations {
-    public struct Stepper<Value>: FieldPresenting where Value: Strideable {
+    public enum Stepper<Value>: FieldPresenting where Value: Strideable {
         public typealias Value = Value
-        
-        public var range: ClosedRange<Value>
-        public var step: Value.Stride
-        
-        public init(range: ClosedRange<Value>, step: Value.Stride) {
-            self.range = range
-            self.step = step
+
+        public struct Regular {
+            public let range: ClosedRange<Value>
+            public let step: Value.Stride
+            
+            public init(range: ClosedRange<Value>, step: Value.Stride) {
+                self.range = range
+                self.step = step
+            }
         }
+
+        case regular(Regular)
     }
 }
 
@@ -316,7 +359,7 @@ extension FieldPresenting where Value: FixedWidthInteger, Value.Stride: BinaryIn
         Self == FieldPresentations.Stepper<T>,
         Value == T
     {
-        .init(range: ClosedRange(range.relative(to: Value.min..<Value.max)), step: step)
+        .regular(.init(range: ClosedRange(range.relative(to: Value.min..<Value.max)), step: step))
     }
 }
 
@@ -329,15 +372,15 @@ extension FieldPresenting where Value: BinaryInteger, Value.Stride: BinaryIntege
         Self == FieldPresentations.Stepper<T>,
         Value == T
     {
-        .init(range: range, step: step)
+        .regular(.init(range: range, step: step))
     }
 }
 
 // MARK: - ButtonPresentation
 
 extension FieldPresentations {
-    public struct ButtonRole {
-        private enum Representation {
+    public struct ButtonRole: Equatable {
+        private enum Representation: Equatable {
             case destructive, regular
         }
         
@@ -348,14 +391,18 @@ extension FieldPresentations {
         private let representation: Representation
     }
 
-    public struct Button: FieldPresenting {
+    public enum Button: FieldPresenting {
         public typealias Value = () -> Void
            
-        public var role: ButtonRole
-        
-        public init(role: ButtonRole) {
-            self.role = role
+        public struct Regular {
+            public let role: ButtonRole
+            
+            public init(role: ButtonRole) {
+                self.role = role
+            }
         }
+
+        case regular(Regular)
     }
 }
 
@@ -366,7 +413,7 @@ extension FieldPresenting where Value == () -> Void {
     ) -> Self where
         Self == FieldPresentations.Button
     {
-        .init(role: role)
+        .regular(.init(role: role))
     }
 }
 
@@ -384,80 +431,52 @@ extension FieldPresentations {
         }
     }
     
-    public struct DatePicker: FieldPresenting {
+    public enum DatePicker: FieldPresenting {
         public typealias Value = Date
-        
-        public var range: DateInterval
-        public var components: DatePickerComponents
-        
-        public init(range: DateInterval, components: DatePickerComponents) {
-            self.range = range
-            self.components = components
+       
+        public struct Inline {
+            public var interval: DateInterval
+            public var components: DatePickerComponents
+            
+            public init(components: DatePickerComponents, interval: DateInterval) {
+                self.components = components
+                self.interval = interval
+            }
         }
+                
+        case inline(Inline)
     }
 }
 
 extension FieldPresenting where Value == Date {
     @inlinable
-    public static func datePicker(
+    public static func picker(
         in interval: DateInterval = .init(start: .distantPast, end: .distantFuture),
         components: FieldPresentations.DatePickerComponents = .date
     ) -> Self where
         Self == FieldPresentations.DatePicker
     {
-        .init(range: interval, components: components)
-    }
-}
-
-// MARK: - URL
-
-extension FieldPresentations {
-    public struct URLInput: FieldPresenting {
-        public typealias Value = URL
-        
-        public init() {
-            // nothing
-        }
-    }
-}
-
-extension FieldPresentations {
-    public struct OptionalURLInput: FieldPresenting {
-        public typealias Value = URL?
-        
-        public init() {
-            // nothing
-        }
-    }
-}
-
-extension FieldPresenting where Value == URL {
-    @inlinable
-    public static func input() -> Self where Self == FieldPresentations.URLInput {
-        .init()
-    }
-}
-
-extension FieldPresenting where Value == URL? {
-    @inlinable
-    public static func input() -> Self where Self == FieldPresentations.OptionalURLInput {
-        .init()
+        .inline(.init(components: components, interval: interval))
     }
 }
 
 // MARK: - DocumentingPresentation
 
 extension FieldPresentations {
-    public struct Documented<Value, Presentation: FieldPresenting>: FieldPresenting where Presentation.Value == Value {
+    public enum Documented<Value, Presentation: FieldPresenting>: FieldPresenting where Presentation.Value == Value {
         public typealias Value = Value
         
-        public var wrapped: Presentation
-        public var documentation: String
-        
-        public init(wrapped: Presentation, documentation: String) {
-            self.wrapped = wrapped
-            self.documentation = documentation
+        public struct DocString {
+            public let wrapped: Presentation
+            public let documentation: String
+            
+            public init(wrapped: Presentation, documentation: String) {
+                self.wrapped = wrapped
+                self.documentation = documentation
+            }
         }
+        
+        case docString(DocString)
     }
 }
 
@@ -469,20 +488,20 @@ extension FieldPresenting {
         Self == FieldPresentations.Documented<T, P>,
         Value == T
     {
-        .init(wrapped: wrapped, documentation: String(doc))
+        .docString(.init(wrapped: wrapped, documentation: String(doc)))
     }
 }
 
 extension FieldPresenting {
     public func document<S: StringProtocol>(_ doc: S) -> FieldPresentations.Documented<Self.Value, Self> {
-        .init(wrapped: self, documentation: String(doc))
+        .docString(.init(wrapped: self, documentation: String(doc)))
     }
 }
 
 // MARK: - NullifyingPresentation
 
 extension FieldPresentations {
-    public struct Nullified<Value, Presentation>: FieldPresenting
+    public enum Nullified<Value, Presentation>: FieldPresenting
     where
         Presentation: FieldPresenting,
         Presentation.Value == Value.Wrapped,
@@ -491,13 +510,17 @@ extension FieldPresentations {
     {
         public typealias Value = Value
         
-        public var wrapped: Presentation
-        public var nilValue: Value.Wrapped
-        
-        public init(wrapped: Presentation, nilValue: Value.Wrapped) {
-            self.wrapped = wrapped
-            self.nilValue = nilValue
+        public struct Matching {
+            public var wrapped: Presentation
+            public var nilValue: Value.Wrapped
+            
+            public init(wrapped: Presentation, nilValue: Value.Wrapped) {
+                self.wrapped = wrapped
+                self.nilValue = nilValue
+            }
         }
+        
+        case matching(Matching)
     }
 }
 
@@ -510,7 +533,7 @@ extension FieldPresenting {
         V: _OptionalProtocol,
         P: FieldPresenting<V>
     {
-        .init(wrapped: wrapped, nilValue: value)
+        .matching(.init(wrapped: wrapped, nilValue: value))
     }
     
     public func nullifying<V>(
@@ -520,6 +543,6 @@ extension FieldPresenting {
         Self.Value == V.Wrapped,
         V.Wrapped: Equatable
     {
-        .init(wrapped: self, nilValue: value)
+        .matching(.init(wrapped: self, nilValue: value))
     }
 }

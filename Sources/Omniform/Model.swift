@@ -125,7 +125,7 @@ public struct FormModel {
                 return $0
             case .group(let model, id: let id, ui: _):
                 return model.filtered(using: query).map {
-                    .group($0, id: id, ui: FieldPresentations.Group<FormModel>(kind: .section(caption: nil)).bundle(with: bind(value: $0)))
+                    .group($0, id: id, ui: FieldPresentations.Group<FormModel>.section(caption: nil).bundle(with: bind(value: $0)))
                 }
             default:
                 return nil

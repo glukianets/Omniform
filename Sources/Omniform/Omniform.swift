@@ -45,7 +45,7 @@ public protocol CustomFormPresentable: CustomFieldPresentable {
 
 extension CustomFormPresentable {
     public static var preferredPresentation: FieldPresentations.Group<Self> {
-        FieldPresentations.Group<Self>.screen()
+        .screen(.init())
     }
 }
 
@@ -159,7 +159,7 @@ extension UInt64: CustomFieldPresentable {
 
 extension Optional: CustomFieldPresentable where Wrapped: CustomFieldPresentable & Equatable & _DefaultInitializable {
     public static var preferredPresentation: FieldPresentations.Nullified<Self, Wrapped.PreferredPresentation> {
-        .init(wrapped: Wrapped.preferredPresentation, nilValue: Wrapped.init())
+        Wrapped.preferredPresentation.nullifying(when: Wrapped.init())
     }
 }
 
