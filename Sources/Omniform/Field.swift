@@ -14,8 +14,8 @@ public struct Field<WrappedValue>: FieldProtocol {
 
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         presentation: some FieldPresenting<WrappedValue>,
         tags: AnyHashable...
     ) {
@@ -28,8 +28,8 @@ public struct Field<WrappedValue>: FieldProtocol {
 extension Field {
     @inlinable
     public init(
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         tags: AnyHashable...
     ) where WrappedValue: CustomFieldPresentable, WrappedValue: _DefaultInitializable {
         self.init(
@@ -44,8 +44,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         tags: AnyHashable...
     ) where WrappedValue: CustomFieldPresentable {
         self.init(
@@ -59,8 +59,8 @@ extension Field {
     
     @inlinable
     public init(
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         presentation: some FieldPresenting<WrappedValue>,
         tags: AnyHashable...
     ) where WrappedValue: _DefaultInitializable {
@@ -78,8 +78,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         tags: AnyHashable...
     ) where
         WrappedValue: PropertyWrapper,
@@ -99,8 +99,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         presentation: some FieldPresenting<WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
@@ -120,8 +120,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         tags: AnyHashable...
     ) where
         WrappedValue: WritablePropertyWrapper,
@@ -139,8 +139,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         presentation: some FieldPresenting<WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
@@ -162,8 +162,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         tags: AnyHashable...
     ) where
         WrappedValue: PropertyWrapper,
@@ -182,8 +182,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         presentation: some FieldPresenting<WrappedValue.WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
@@ -204,8 +204,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         tags: AnyHashable...
     ) where
         WrappedValue: WritablePropertyWrapper,
@@ -224,8 +224,8 @@ extension Field {
     @inlinable
     public init(
         wrappedValue: WrappedValue,
-        name: FieldName? = nil,
-        icon: FieldIcon? = nil,
+        name: Metadata.Name? = nil,
+        icon: Metadata.Icon? = nil,
         presentation: some FieldPresenting<WrappedValue.WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
