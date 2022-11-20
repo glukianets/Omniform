@@ -200,7 +200,7 @@ private extension FieldProtocol {
 
 extension Metadata {
     fileprivate func matches(query: String) -> Bool {
-        return self.name?.localizedStandardContains(query) ?? false
+        return self.name?.description.localizedStandardContains(query) ?? false
             || self.externalName?.localizedCaseInsensitiveContains(query) ?? false
     }
 }
