@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-// MARK: - OmniformPresentationEnvironmentKey
+// MARK: - OmniformPresentation
 
 public struct OmniformPresentation: Equatable {
     internal enum PresentationKind {
@@ -31,6 +31,102 @@ public extension View {
         self.environment(\.omniformPresentation, kind)
     }
 }
+
+// MARK: - OmniformResourceResolving
+
+public protocol OmniformResourceResolving {
+    func image(_ icon: Metadata.Image, value: some Any) -> Image
+    func text(_ string: Metadata.Text, value: some Any) -> Text
+}
+
+public extension OmniformResourceResolving {
+    func image(_ icon: Metadata.Image, value: some Any) -> Image {
+        switch icon {
+        case .system(let content):
+            if #available(iOS 16.0, *) {
+                return Image(systemName: content.name, variableValue: content.value)
+            } else {
+                return Image(systemName: content.name)
+            }
+        case .custom(let content):
+            if #available(iOS 16.0, *) {
+                return Image(decorative: content.name, variableValue: content.value)
+            } else {
+                return Image(decorative: content.name)
+            }
+        case .native(let content):
+            return Image(decorative: content.image, scale: content.scale, orientation: content.orientation.swiftUI)
+        }
+    }
+    
+    func text(_ string: Metadata.Text, value: some Any) -> Text {
+        switch string {
+        case .text(let content):
+            var result: String
+            if content.options.contains(.localizable) {
+                result = NSLocalizedString(
+                    content.key,
+                    tableName: content.table,
+                    bundle: content.bundle ?? .main,
+                    comment: content.key
+                )
+            } else {
+                result = content.key
+            }
+            
+            if content.options.contains([.formattable, .localizable]) {
+                result = String.localizedStringWithFormat(result, [value])
+            } else if content.options.contains([.formattable]) {
+                result = String(format: result, [value])
+            }
+
+            return Text(verbatim: result)
+        }
+    }
+}
+
+private struct OmniformResourceResolvingEnvironmentKey: EnvironmentKey {
+    static let defaultValue: any OmniformResourceResolving = OmniformResourceResolver()
+}
+
+public extension EnvironmentValues {
+    var omniformResourceResolver: any OmniformResourceResolving {
+        get { self[OmniformResourceResolvingEnvironmentKey.self] }
+        set { self[OmniformResourceResolvingEnvironmentKey.self] = newValue }
+    }
+}
+
+public extension View {
+    func omniformResourceResolver(_ value: any OmniformResourceResolving) -> some View {
+        self.environment(\.omniformResourceResolver, value)
+    }
+}
+
+private struct OmniformResourceResolver: OmniformResourceResolving { }
+
+private extension Metadata.Image.Orientation {
+    var swiftUI: Image.Orientation {
+        switch self {
+        case .up(false):
+            return .up
+        case .up(true):
+            return .upMirrored
+        case .down(false):
+            return .down
+        case .down(true):
+            return .downMirrored
+        case .left(false):
+            return .left
+        case .left(true):
+            return .leftMirrored
+        case .right(false):
+            return .right
+        case .right(true):
+            return .rightMirrored
+        }
+    }
+}
+
 
 // MARK: - OmniformStyleEnvironmentKey
 

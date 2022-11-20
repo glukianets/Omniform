@@ -33,8 +33,8 @@ extension FieldPresentations.Group: SwiftUIFormPresenting {
         
         var body: some View {
             if self.presentationKind == .navigation {
-                NavigationLink(model.metadata.displayName) {
-                    DynamicView(OmniformView(model: model))
+                NavigationLink(destination: DynamicView(OmniformView(model: model))) {
+                    MetadataLabel(model.metadata, value: .constant(model))
                 }
             } else {
                 SectionView(model: self.model, caption: nil)
@@ -50,7 +50,7 @@ extension FieldPresentations.Group: SwiftUIFormPresenting {
             SwiftUI.Section {
                 OmniformContentView(model: self.model)
             } header: {
-                Text(self.model.metadata.displayName)
+                MetadataLabel(self.model.metadata, value: .constant(model))
             } footer: {
                 if let caption = self.caption {
                     Text(caption)
@@ -182,8 +182,10 @@ extension FieldPresenting where Value: SwiftUI.View {
 
 extension FieldPresentations.Toggle: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        SwiftUI.Toggle(field.displayName, isOn: binding.forSwiftUI)
-            .erased
+        let binding = binding.forSwiftUI
+        return SwiftUI.Toggle(isOn: binding) {
+            MetadataLabel(field, value: binding)
+        }.erased
     }
 }
 
@@ -299,10 +301,12 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
         let canDeselect: Bool
         
         var body: some View {
-            let picker = SwiftUI.Picker(field.displayName, selection: binding) {
+            let picker = SwiftUI.Picker(selection: binding) {
                 ForEach(presentation.values, id: \.self) { item in
                     Text(String(optionalyDescribing: item))
                 }
+            } label: {
+                MetadataLabel(field, value: binding)
             }
 
             return SwiftUI.Group {
@@ -325,7 +329,7 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
                             }
                         } label: {
                             HStack {
-                                Text(field.displayName)
+                                MetadataLabel(field, value: binding)
                                 Spacer()
                                 Text(String(optionalyDescribing: binding.value))
                                     .foregroundColor(Color.secondary)
@@ -390,7 +394,7 @@ extension FieldPresentations.Stepper: SwiftUIFieldPresenting {
             case .regular(let content):
                 SwiftUI.Stepper(value: binding.forSwiftUI, in: content.range, step: content.step) {
                     HStack {
-                        Text(field.displayName)
+                        MetadataLabel(field, value: binding.forSwiftUI)
                         Spacer()
                         Text(String(describing: binding.value))
                     }.padding(.trailing)
@@ -405,15 +409,17 @@ extension FieldPresentations.Stepper: SwiftUIFieldPresenting {
 extension FieldPresentations.Button: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         SwiftUI.Group {
+            let label = MetadataLabel(field, value: binding.forSwiftUI)
+            
             switch self {
             case .regular(let content):
                 SwiftUI.Button(action: binding.value) {
                     switch content.role {
                     case .regular:
-                        Text(field.displayName)
+                        label
                     case .destructive:
-                        Text(field.displayName)
-                            .fontWeight(.semibold)
+                        MetadataLabel(field, value: binding.forSwiftUI)
+                            //.fontWeight(.semibold)
                             .foregroundColor(.red)
                     default:
                         fatalError("unreachable")
@@ -446,35 +452,39 @@ extension FieldPresentations.DatePicker: SwiftUIFieldPresenting {
             case .inline(let content):
                 switch (content.interval.start, content.interval.end) {
                 case (.distantPast, .distantFuture):
-                    return SwiftUI.DatePicker(
-                        field.displayName,
+                    SwiftUI.DatePicker(
                         selection: binding.forSwiftUI,
                         displayedComponents: content.components.swiftUI
-                    )
+                    ) {
+                        MetadataLabel(field, value: binding.forSwiftUI)
+                    }
                 
                 case (.distantPast, let future):
-                    return SwiftUI.DatePicker(
-                        field.displayName,
+                    SwiftUI.DatePicker(
                         selection: binding.forSwiftUI,
                         in: ...future,
                         displayedComponents: content.components.swiftUI
-                    )
+                    ) {
+                        MetadataLabel(field, value: binding.forSwiftUI)
+                    }
                     
                 case (let past, .distantFuture):
-                    return SwiftUI.DatePicker(
-                        field.displayName,
+                    SwiftUI.DatePicker(
                         selection: binding.forSwiftUI,
                         in: past...,
                         displayedComponents: content.components.swiftUI
-                    )
+                    ) {
+                        MetadataLabel(field, value: binding.forSwiftUI)
+                    }
 
                 case (let past, let future):
-                    return SwiftUI.DatePicker(
-                        field.displayName,
+                    SwiftUI.DatePicker(
                         selection: binding.forSwiftUI,
                         in: past...future,
                         displayedComponents: content.components.swiftUI
-                    )
+                    ) {
+                        MetadataLabel(field, value: binding.forSwiftUI)
+                    }
                 }
             }
         }.erased
