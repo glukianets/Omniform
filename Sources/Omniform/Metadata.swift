@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-public struct Metadata: Equatable {
+public struct Metadata: Equatable, Identifiable {
     public let type: Any.Type
     public let id: AnyHashable
     public let name: Metadata.Name?
@@ -42,6 +42,16 @@ public struct Metadata: Equatable {
         )
     }
     
+    internal func coalescing(with other: Metadata) -> Self {
+        self.with(
+            type: other.type,
+            id: other.id,
+            name: other.name.map { $0 },
+            icon: other.icon.map { $0 },
+            externalName: other.externalName.map { $0 }
+        )
+    }
+    
     public static func == (lhs: Metadata, rhs: Metadata) -> Bool {
         return lhs.type == rhs.type
         && lhs.name == rhs.name
@@ -64,7 +74,7 @@ internal struct SurrogateMetadata: Equatable {
     }
     
     internal func with(id: AnyHashable, externalName: String? = nil) -> Metadata {
-        .init(type: self.type, id: id, name: self.name, externalName: externalName)
+        .init(type: self.type, id: id, name: self.name, icon: self.icon, externalName: externalName)
     }
     
     public static func == (lhs: SurrogateMetadata, rhs: SurrogateMetadata) -> Bool {
@@ -117,7 +127,7 @@ extension Metadata {
         }
         
         public init(stringLiteral value: String) {
-            self = .custom(value)
+            self = .system(value)
         }
     }
 }

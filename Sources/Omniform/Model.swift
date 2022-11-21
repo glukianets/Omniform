@@ -83,16 +83,6 @@ public struct FormModel {
     }
     
     private init<S>(_through binding: any ValueBinding<S>, options: Options = []) {
-        if #available(iOS 16, macOS 13, *) {
-            if
-                let customType = S.self as? any CustomFormPresentable.Type,
-                let model = customType.dataModel(throughErased: binding)
-            {
-                self = model
-                return
-            }
-        }
-        
         let members: [Member] = Self.cache[for: S.self].children.compactMap { child in
             if let type = type(of: child.keyPath).valueType as? any FieldProtocol.Type {
                 return type.build(from: binding, through: child.keyPath, name: child.label)
@@ -167,7 +157,7 @@ private extension CustomFieldPresentable {
         
         if let presentation = self.preferredPresentation as? FieldPresentations.Group<Self> {
             var model = FormModel(through: wrappedValueBinding)
-            model.metadata = model.metadata.with(externalName: name)
+            model.metadata = model.metadata.with(type: self, id: keyPath, externalName: name)
             return .group(model, id: keyPath, ui: presentation.bundle(with: wrappedValueBinding))
         } else {
             let presentation = self.preferredPresentation
@@ -186,7 +176,7 @@ private extension FieldProtocol {
 
         if let presentation = value.presentation as? FieldPresentations.Group<Self.WrappedValue> {
             var model = FormModel(through: wrappedValueBinding)
-            model.metadata = model.metadata.with(externalName: name)
+            model.metadata = value.metadata.with(id: keyPath, externalName: name).coalescing(with: model.metadata)
             return .group(model, id: keyPath, ui: presentation.bundle(with: wrappedValueBinding))
         } else {
             let presentation = value.presentation

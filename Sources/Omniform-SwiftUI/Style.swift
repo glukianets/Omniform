@@ -35,12 +35,12 @@ public extension View {
 // MARK: - OmniformResourceResolving
 
 public protocol OmniformResourceResolving {
-    func image<Value>(_ icon: Metadata.Icon, value: Value) -> SwiftUI.Image
+    func image(_ icon: Metadata.Icon, value: some Any) -> Image
     func text(_ string: Metadata.Name, value: some Any) -> Text
 }
 
 public extension OmniformResourceResolving {
-    func image(_ icon: Metadata.Icon, value: some Any) -> SwiftUI.Image {
+    func image(_ icon: Metadata.Icon, value: some Any) -> Image {
         switch icon {
         case .system(let content):
             if #available(iOS 16.0, *) {
