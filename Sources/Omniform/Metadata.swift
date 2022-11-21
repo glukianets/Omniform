@@ -4,33 +4,32 @@ import CoreGraphics
 public struct Metadata: Equatable, Identifiable {
     public let type: Any.Type
     public let id: AnyHashable
-    public let name: Metadata.Name?
-    public let icon: Metadata.Icon?
+    public let name: Metadata.Text?
+    public let icon: Metadata.Image?
     public let externalName: String?
     public let tags: Set<AnyHashable>
     
     internal init(
         type: Any.Type,
         id: AnyHashable,
-        name: Metadata.Name? = nil,
-        icon: Metadata.Icon? = nil,
+        name: Metadata.Text? = nil,
+        icon: Metadata.Image? = nil,
         externalName: String? = nil,
         tags: Set<AnyHashable> = []
     ) {
         self.type = type
         self.id = id
-        self.name = name ?? (externalName?.dropPrefix("_").humanReadable).map(Metadata.Name.verbatim(_:))
+        self.name = name ?? (externalName?.dropPrefix("_").humanReadable).map(Metadata.Text.verbatim(_:))
         self.icon = icon
         self.externalName = externalName
         self.tags = tags
-        print(self)
     }
     
     internal func with(
         type: Any.Type? = nil,
         id: AnyHashable? = nil,
-        name: Metadata.Name?? = .none,
-        icon: Metadata.Icon?? = .none,
+        name: Metadata.Text?? = .none,
+        icon: Metadata.Image?? = .none,
         externalName: String?? = .none
     ) -> Self {
         .init(
@@ -62,11 +61,11 @@ public struct Metadata: Equatable, Identifiable {
 
 internal struct SurrogateMetadata: Equatable {
     public var type: Any.Type
-    public var name: Metadata.Name?
-    public var icon: Metadata.Icon?
+    public var name: Metadata.Text?
+    public var icon: Metadata.Image?
     public var tags: Set<AnyHashable>
     
-    internal init(type: Any.Type, name: Metadata.Name? = nil, icon: Metadata.Icon? = nil, tags: AnyHashable...) {
+    internal init(type: Any.Type, name: Metadata.Text? = nil, icon: Metadata.Image? = nil, tags: AnyHashable...) {
         self.type = type
         self.name = name
         self.icon = icon
@@ -85,7 +84,7 @@ internal struct SurrogateMetadata: Equatable {
 // MARK: - FieldIcon
 
 extension Metadata {
-    public enum Icon: ExpressibleByStringLiteral, Equatable {
+    public enum Image: ExpressibleByStringLiteral, Equatable {
         public enum Orientation: Equatable {
             case up(mirrored: Bool = false)
             case down(mirrored: Bool = false)
@@ -135,7 +134,7 @@ extension Metadata {
 // MARK: - FieldName
 
 extension Metadata {
-    public enum Name: ExpressibleByStringLiteral, CustomStringConvertible, Equatable {
+    public enum Text: ExpressibleByStringLiteral, CustomStringConvertible, Equatable {
         public struct Options: OptionSet {
             public static var localizable = Self(rawValue: 1 << 1)
             public static var formattable = Self(rawValue: 1 << 2)

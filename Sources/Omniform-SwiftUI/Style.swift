@@ -35,12 +35,12 @@ public extension View {
 // MARK: - OmniformResourceResolving
 
 public protocol OmniformResourceResolving {
-    func image(_ icon: Metadata.Icon, value: some Any) -> Image
-    func text(_ string: Metadata.Name, value: some Any) -> Text
+    func image(_ icon: Metadata.Image, value: some Any) -> Image
+    func text(_ string: Metadata.Text, value: some Any) -> Text
 }
 
 public extension OmniformResourceResolving {
-    func image(_ icon: Metadata.Icon, value: some Any) -> Image {
+    func image(_ icon: Metadata.Image, value: some Any) -> Image {
         switch icon {
         case .system(let content):
             if #available(iOS 16.0, *) {
@@ -59,7 +59,7 @@ public extension OmniformResourceResolving {
         }
     }
     
-    func text(_ string: Metadata.Name, value: some Any) -> Text {
+    func text(_ string: Metadata.Text, value: some Any) -> Text {
         switch string {
         case .text(let content):
             var result: String
@@ -104,7 +104,7 @@ public extension View {
 
 private struct OmniformResourceResolver: OmniformResourceResolving { }
 
-private extension Metadata.Icon.Orientation {
+private extension Metadata.Image.Orientation {
     var swiftUI: Image.Orientation {
         switch self {
         case .up(false):

@@ -6,9 +6,9 @@ import SwiftUI
 internal struct MetadataImageView<Value>: View {
     @Environment(\.omniformResourceResolver) private var resourceResolver
     @Binding private var value: Value
-    private let image: Metadata.Icon
+    private let image: Metadata.Image
     
-    public init(_ image: Metadata.Icon, value: Binding<Value>) {
+    public init(_ image: Metadata.Image, value: Binding<Value>) {
         self._value = value
         self.image = image
     }
@@ -21,9 +21,9 @@ internal struct MetadataImageView<Value>: View {
 internal struct MetadataTextView<Value>: View {
     @Environment(\.omniformResourceResolver) private var resourceResolver
     @Binding private var value: Value
-    private let text: Metadata.Name
+    private let text: Metadata.Text
     
-    public init(_ text: Metadata.Name, value: Binding<Value>) {
+    public init(_ text: Metadata.Text, value: Binding<Value>) {
         self._value = value
         self.text = text
     }
@@ -36,14 +36,14 @@ internal struct MetadataTextView<Value>: View {
 internal struct MetadataLabel<Value>: View {
     @Environment(\.omniformResourceResolver) private var resourceResolver
     @Binding private var value: Value
-    private let text: Metadata.Name?
-    private let image: Metadata.Icon?
+    private let text: Metadata.Text?
+    private let image: Metadata.Image?
     
     public init(_ metadata: Metadata, value: Binding<Value>) {
         self.init(text: metadata.name, image: metadata.icon, value: value)
     }
 
-    public init(text: Metadata.Name?, image: Metadata.Icon?, value: Binding<Value>) {
+    public init(text: Metadata.Text?, image: Metadata.Image?, value: Binding<Value>) {
         self._value = value
         self.text = text
         self.image = image
@@ -58,7 +58,7 @@ internal struct MetadataLabel<Value>: View {
             }
         } icon: {
             if let view = self.image.map({ self.resourceResolver.image($0, value: self.value) }) {
-                view.foregroundColor(.primary)
+                view
             } else {
                 EmptyView()
             }
