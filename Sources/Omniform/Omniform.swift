@@ -29,8 +29,7 @@ public protocol FieldVisiting<Result> {
     func visit<Value>(
         group: FormModel,
         id: AnyHashable,
-        using presentation:
-        some FieldPresenting<Value>,
+        using presentation: some FieldPresenting<Value>,
         through binding: some ValueBinding<Value>
     ) -> Result
 }
@@ -38,9 +37,7 @@ public protocol FieldVisiting<Result> {
 // MARK: - CustomFieldsContaining
 
 public protocol CustomFormPresentable: CustomFieldPresentable {
-    static var dataModelTitle: String { get }
-    
-    static func dataModel(through binding: any ValueBinding<Self>) -> FormModel?
+    static func formModel(for binding: some ValueBinding<Self>) -> FormModel
 }
 
 extension CustomFormPresentable {
@@ -49,13 +46,33 @@ extension CustomFormPresentable {
     }
 }
 
-extension CustomFormPresentable {
-    public static var dataModelTitle: String {
-        String(describing: Self.self)
+extension CustomFormPresentable where Self: CustomFormBuilding {
+    public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
+        FormModel(name: self.formName, icon: self.formIcon, binding: binding, self.buildForm(_:))
     }
+}
 
-    public static func dataModel(through binding: any ValueBinding<Self>) -> FormModel? {
+// MARK: - CustomFieldsBuilding
+
+public protocol CustomFormBuilding: CustomFormPresentable {
+    static var formName: Metadata.Text? { get }
+    static var formIcon: Metadata.Image? { get }
+    
+    @FormModel.Builder
+    static func buildForm(_ binding: some ValueBinding<Self>) -> FormModel.Prototype
+}
+
+extension CustomFormBuilding {
+    public static var formName: Metadata.Text? {
+        .runtime(self)
+    }
+    
+    public static var formIcon: Metadata.Image? {
         nil
+    }
+    
+    public static func buildForm(_ binding: some ValueBinding<Self>) -> FormModel.Prototype {
+        .init(dynamicallyInspecting: binding, options: .default)
     }
 }
 

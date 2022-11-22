@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - String
 
-internal extension String {
+internal extension StringProtocol {
     var humanReadable: String {
         let result: String = self.components(separatedBy: .whitespacesAndNewlines).flatMap { word in
             word.split { l, r in !l.isUppercase && r.isUppercase }.flatMap { group -> [String] in
@@ -17,8 +17,8 @@ internal extension String {
         return (result.first?.uppercased() ?? "") + result.dropFirst()
     }
     
-    func dropPrefix(_ prefix: String) -> Self {
-        self.hasPrefix(prefix) ? String(self.dropFirst(prefix.count)) : self
+    func dropPrefix(_ prefix: String) -> Self.SubSequence {
+        self.hasPrefix(prefix) ? self.dropFirst(prefix.count) : self[...]
     }
 }
 
