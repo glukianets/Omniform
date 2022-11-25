@@ -52,7 +52,7 @@ public struct FormModel {
         self = .init(metadata: metadata, members: prototype.members)
     }
     
-    public init<S>(for binding: some ValueBinding<S>, options: Options = .default) {
+    public init<S>(_ binding: some ValueBinding<S>, options: Options = .default) {
         if let trampoline = CustomFormPresentableDispatch(type: S.self, binding: binding) as? CustomFormTrampoline {
             self = trampoline.form
         } else {
@@ -113,13 +113,24 @@ private protocol MemberProtocol {
     func group<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result
 }
 
-private extension FieldPresenting {
-    func bundle(with binding: some ValueBinding<Self.Value>) -> any MemberProtocol {
-        FieldRecord(presentation: self, binding: binding)
+extension MemberProtocol {
+    func member(metadata: Metadata) -> FormModel.Member {
+        if let builder = self as? GroupMemberBuilding {
+            return builder.member(metadata: metadata)
+        } else if let builder = self as? FieldMemberBuilding {
+            return builder.member(metadata: metadata)
+        } else {
+            fatalError("Self is not [Field|Group]MemberBuilding")
+        }
     }
 }
 
-private func fieldRecord<P: FieldPresenting, B: ValueBinding>(presentation: P, binding: B) -> MemberProtocol where P.Value == B.Value {
+private func fieldRecord<P, B>(presentation: P, binding: B) -> MemberProtocol
+where
+    P: FieldPresenting,
+    B: ValueBinding,
+    P.Value == B.Value
+{
     FieldRecord<P, B>(presentation: presentation, binding: binding)
 }
 
@@ -136,28 +147,37 @@ private struct FieldRecord<P: FieldPresenting, B: ValueBinding>: MemberProtocol 
     }
 }
 
+private protocol FieldMemberBuilding {
+    func member(metadata: Metadata) -> FormModel.Member
+}
+
+private protocol GroupMemberBuilding {
+    func member(metadata: Metadata) -> FormModel.Member
+}
+
+extension FieldRecord: FieldMemberBuilding {
+    func member(metadata: Metadata) -> FormModel.Member {
+        .init(representation: .field(metadata, id: metadata.id, ui: self))
+    }
+}
+
+extension FieldRecord: GroupMemberBuilding where P: GroupPresenting {
+    func member(metadata: Metadata) -> FormModel.Member {
+        if let form = self.presentation.makeForm(metadata: metadata, binding: self.binding) {
+            return .init(representation: .group(form, id: metadata.id, ui: self))
+        } else {
+            return .init(representation: .field(metadata, id: metadata.id, ui: self))
+        }
+    }
+}
+
 private extension CustomFieldPresentable {
     static func build<Root>(from binding: some ValueBinding<Root>, through keyPath: PartialKeyPath<Root>, name: String?) -> FormModel.Member? {
         guard let keyPath = keyPath as? KeyPath<Root, Self> else { return nil }
         let wrappedValueBinding = binding.map(keyPath: keyPath)
         
-        if let presentation = self.preferredPresentation as? FieldPresentations.Group<Self> {
-            var model = FormModel(for: wrappedValueBinding)
-            model.metadata = model.metadata.with(type: self, id: keyPath, externalName: name)
-            return .group(
-                model: model,
-                presentation: presentation,
-                binding: wrappedValueBinding
-            ).with(id: keyPath)
-        } else {
-            let presentation = self.preferredPresentation
-            let metadata = Metadata(type: self, id: keyPath, externalName: name)
-            return .field(
-                wrappedValueBinding,
-                metadata: metadata,
-                presentation: presentation
-            ).with(id: keyPath)
-        }
+        return fieldRecord(presentation: self.preferredPresentation, binding: wrappedValueBinding)
+            .member(metadata: Metadata(type: self, id: keyPath, externalName: name))
     }
 }
 
@@ -168,23 +188,8 @@ private extension FieldProtocol {
         let value = fieldBinding.value
         let wrappedValueBinding = fieldBinding.map(keyPath: \.wrappedValue)
 
-        if let presentation = value.presentation as? FieldPresentations.Group<Self.WrappedValue> {
-            var model = FormModel(for: wrappedValueBinding)
-            model.metadata = value.metadata.with(id: keyPath, externalName: name).coalescing(with: model.metadata)
-            return .group(
-                model: model,
-                presentation: presentation,
-                binding: wrappedValueBinding
-            ).with(id: keyPath)
-        } else {
-            let presentation = value.presentation
-            let metadata = value.metadata.with(id: keyPath, externalName: name)
-            return .field(
-                wrappedValueBinding,
-                metadata: metadata,
-                presentation: presentation
-            ).with(id: keyPath)
-        }
+        return fieldRecord(presentation: value.presentation, binding: wrappedValueBinding)
+            .member(metadata: value.metadata.with(id: keyPath, externalName: name))
     }
 }
 
@@ -219,7 +224,7 @@ private final class MirrorCache {
     }
 }
 
-// MARK: - Utility
+// MARK: - CustomFormPresentable + Utility
 
 private protocol CustomFormTrampoline {
     var form: FormModel { get }
@@ -333,7 +338,7 @@ extension FormModel {
             presentation: some FieldPresenting<T>
         ) -> Self {
             .group(
-                model: FormModel(for: binding),
+                model: FormModel(binding),
                 presentation: presentation,
                 binding: binding
             )
@@ -361,8 +366,8 @@ extension FormModel {
             .init(representation: .group(
                 model,
                 id: NoID(),
-                ui: fieldRecord(presentation: presentation, binding: binding))
-            )
+                ui: fieldRecord(presentation: presentation, binding: binding)
+            ))
         }
         
         public static func field<T>(
@@ -398,8 +403,8 @@ extension FormModel {
             .init(representation: .field(
                 metadata,
                 id: metadata.id,
-                ui: fieldRecord(presentation: presentation, binding: binding))
-            )
+                ui: fieldRecord(presentation: presentation, binding: binding)
+            ))
         }
         
         public static func field<T>(
@@ -415,7 +420,7 @@ extension FormModel {
 
         fileprivate private(set) var representation: FormModel.Record
         
-        private init(representation: FormModel.Record) {
+        fileprivate init(representation: FormModel.Record) {
             self.representation = representation
         }
         

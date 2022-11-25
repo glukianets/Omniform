@@ -7,7 +7,7 @@ public protocol SwiftUIFieldPresenting<Value>: FieldPresenting {
     func body(for field: Metadata, binding: some ValueBinding<Value>) -> Body
 }
 
-public protocol SwiftUIFormPresenting<Value>: FieldPresenting {
+public protocol SwiftUIGroupPresenting<Value>: GroupPresenting {
     func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R
 }
 
@@ -26,7 +26,7 @@ private extension FieldPresentations {
     }
 }
 
-extension FieldPresentations.Group: SwiftUIFormPresenting {
+extension FieldPresentations.Group: SwiftUIGroupPresenting {
     private struct NavigationLinkView: View {
         @Environment(\.omniformPresentation) var presentationKind
         let model: FormModel
@@ -210,7 +210,7 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting {
 
 // MARK: - Picker
 
-extension FieldPresentations.Picker: SwiftUIFieldPresenting {
+extension FieldPresentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
     private struct SelectionItem: View {
         @Binding var selection: Value?
         var value: Value
@@ -239,57 +239,42 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
     }
     
     private struct SelectionView: View {
-        internal let allCases: [Value]
-        @Binding var selection: Value?
-        
-        init(allCases: [Value], selection: Binding<Value?>) {
-            self._selection = selection
-            self.allCases = allCases
+        public struct Options: OptionSet {
+            public static var dismissOnSelection: Self { .init(rawValue: 1 << 1) }
+            
+            public var rawValue: UInt
+            public init(rawValue: UInt) {
+                self.rawValue = rawValue
+            }
         }
         
-        init(allCases: [Value], selection: Binding<Value>) {
+        @Environment(\.presentationMode) var presentationMode
+        internal let allCases: [Value]
+        @Binding var selection: Value?
+        internal let options: Options
+        
+        init(allCases: [Value], selection: Binding<Value?>, options: Options) {
+            self._selection = selection
+            self.allCases = allCases
+            self.options = options
+        }
+        
+        init(allCases: [Value], selection: Binding<Value>, options: Options) {
             let binding: any WritableValueBinding<Value?> = selection.map(get: { $0 }, set: { $0 })
             self._selection = binding.forSwiftUI
             self.allCases = allCases
+            self.options = options
         }
 
         
         var body: some View {
             List(self.allCases, id: \.self) { item in
                 SelectionItem(value: item, selection: self.$selection)
+            }.onChange(of: self.selection) { newValue in
+                guard self.options.contains(.dismissOnSelection) else { return }
+                self.presentationMode.wrappedValue.dismiss()
             }
-        }
-    }
-    
-    private struct SelectionScreenView: View {
-        @Environment(\.presentationMode) var presentationMode
-        internal let allCases: [Value]
-        @Binding var selection: Value?
-        
-        
-        init(allCases: [Value], selection: Binding<Value?>) {
-            self._selection = selection
-            self.allCases = allCases
-        }
-        
-        init(allCases: [Value], selection: Binding<Value>) {
-            let binding: any WritableValueBinding<Value?> = selection.map(get: { $0 }, set: { $0 })
-            self._selection = binding.forSwiftUI
-            self.allCases = allCases
-        }
 
-        
-        var body: some View {
-            let selectionView = SelectionView(allCases: self.allCases, selection: self.$selection)
-            
-            if #available(iOS 14.0, *) {
-                selectionView
-                    .onChange(of: self.selection) { newValue in
-                        self.presentationMode.wrappedValue.dismiss()
-                    }
-            } else {
-                selectionView
-            }
         }
     }
     
@@ -302,7 +287,7 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
         
         var body: some View {
             let picker = SwiftUI.Picker(selection: binding) {
-                ForEach(presentation.values, id: \.self) { item in
+                ForEach(presentation.data.values, id: \.self) { item in
                     Text(String(optionalyDescribing: item))
                 }
             } label: {
@@ -310,32 +295,26 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
             }
 
             return SwiftUI.Group {
-                switch self.presentation.style {
+                switch self.presentation {
                 case .auto:
                     picker.pickerStyle(.automatic)
-                case .inline:
-                    SelectionView(allCases: presentation.values, selection: binding)
                 case .segments:
                     picker.pickerStyle(.segmented)
-                case .selection where self.omniformPresentation == .navigation:
-                    if #available(iOS 16, *) {
-                        picker.pickerStyle(.navigationLink)
-                    } else {
-                        NavigationLink {
-                            DynamicView {
-                                SelectionScreenView(allCases: presentation.values, selection: binding)
-                                    .listStyle(.grouped)
-                                    .navigationBarTitle(field.displayName, displayMode: .inline)
+                case let .selection(content):
+                    SelectionView(
+                        allCases: self.presentation.data.values,
+                        selection: self.binding,
+                        options: {
+                            if
+                                case .none = content.presentation,
+                                self.omniformPresentation != .standalone
+                            {
+                                return .dismissOnSelection
+                            } else {
+                                return []
                             }
-                        } label: {
-                            HStack {
-                                MetadataLabel(field, value: binding)
-                                Spacer()
-                                Text(String(optionalyDescribing: binding.value))
-                                    .foregroundColor(Color.secondary)
-                            }
-                        }
-                    }
+                        }()
+                    )
                 case .wheel where !canDeselect:
                     picker.pickerStyle(.wheel)
                 case .menu where !canDeselect:
@@ -353,15 +332,31 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting {
     
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         let swiftUIBinding: Binding<Value>
-        if let dv = self.deselectionValue {
+        if let dv = self.data.deselectionValue {
             let mapped = binding.map { $0 } set: { $0 = $0 == $1 ? dv : $1 }
             swiftUIBinding = mapped.forSwiftUI
         } else {
             swiftUIBinding = binding.forSwiftUI
         }
-        let canDeselect = self.deselectionValue != nil
+        let canDeselect = self.data.deselectionValue != nil
 
         return PickerView(presentation: self, field: field, binding: swiftUIBinding, canDeselect: canDeselect).erased
+    }
+    
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+        let binding = bind { () -> Value in
+            preconditionFailure("Faux binding for type \(Value.self) shouldn't be called")
+        }
+        
+        if
+            case .selection(let content) = self,
+            let presentation = content.presentation,
+            let dispatch = dispatch(presentation: presentation, binding: binding) as? GroupViewBuilding
+        {
+            return dispatch.build(model: model, id: id, builder: builder)
+        } else {
+            return FieldPresentations.Group<Value>.inline().body(for: model, id: id, builder: builder)
+        }
     }
 }
 
@@ -486,6 +481,25 @@ extension FieldPresentations.DatePicker: SwiftUIFieldPresenting {
                         MetadataLabel(field, value: binding.forSwiftUI)
                     }
                 }
+            }
+        }.erased
+    }
+}
+
+// MARK: - EitherPresentation
+
+extension FieldPresentations.EitherPresentation: SwiftUIFieldPresenting
+where
+    First: SwiftUIFieldPresenting,
+    Second: SwiftUIFieldPresenting
+{
+    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+        Group {
+            switch self {
+            case .first(let presentation):
+                presentation.body(for: field, binding: binding)
+            case .second(let presentation):
+                presentation.body(for: field, binding: binding)
             }
         }.erased
     }

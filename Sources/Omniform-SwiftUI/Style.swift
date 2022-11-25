@@ -191,28 +191,31 @@ public struct SettingsOmniformViewStyle<FieldModifier: ViewModifier, GroupModifi
 
 internal typealias ViewElement = (id: AnyHashable, view: AnyView)
 
-private protocol FieldViewBuilding {
-    func build(field: Metadata, id: AnyHashable) -> ViewElement
+internal protocol FieldViewBuilding {
+    func build(field: Metadata, id: AnyHashable, style: some OmniformStyle) -> ViewElement
 }
 
-private protocol GroupViewBuilding {
+internal protocol GroupViewBuilding {
     func build<R>(model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R
 }
 
 // TODO: Replace with simple cast for iOS >= 16 & macOS >= 13
-private struct Dispatch<P, B, S> where P: FieldPresenting, B: ValueBinding, S: OmniformStyle,  P.Value == B.Value {
+internal struct Dispatch<P, B> where P: FieldPresenting, B: ValueBinding, P.Value == B.Value {
     public let presentation: P
     public let binding: B
-    public let style: S
+}
+
+internal func dispatch<T>(presentation: some FieldPresenting<T>, binding: some ValueBinding<T>) -> Any {
+    Dispatch(presentation: presentation, binding: binding)
 }
 
 extension Dispatch: FieldViewBuilding where P: SwiftUIFieldPresenting {
-    func build(field: Metadata, id: AnyHashable) -> ViewElement {
-        return (id, self.presentation.body(for: field, binding: self.binding, modifier: self.style.fieldModifier).erased)
+    func build(field: Metadata, id: AnyHashable, style: some OmniformStyle) -> ViewElement {
+        return (id, self.presentation.body(for: field, binding: self.binding, modifier: style.fieldModifier).erased)
     }
 }
 
-extension Dispatch: GroupViewBuilding where P: SwiftUIFormPresenting {
+extension Dispatch: GroupViewBuilding where P: SwiftUIGroupPresenting {
     func build<R>(model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
         return self.presentation.body(for: model, id: id, builder: builder)
     }
@@ -231,8 +234,8 @@ internal struct SwiftUIFieldVisitor<Style: OmniformStyle>: FieldVisiting {
         using presentation: some FieldPresenting<Value>,
         through binding: some ValueBinding<Value>
     ) -> ViewElement {
-        if let dd = Dispatch(presentation: presentation, binding: binding, style: self.style) as? FieldViewBuilding {
-            return dd.build(field: field, id: id)
+        if let dd = Dispatch(presentation: presentation, binding: binding) as? FieldViewBuilding {
+            return dd.build(field: field, id: id, style: self.style)
         } else {
             return (id, EmptyView().erased)
         }
@@ -245,7 +248,7 @@ internal struct SwiftUIFieldVisitor<Style: OmniformStyle>: FieldVisiting {
         some FieldPresenting<Value>,
         through binding: some ValueBinding<Value>
     ) -> ViewElement {
-        if let dd = Dispatch(presentation: presentation, binding: binding, style: self.style) as? GroupViewBuilding {
+        if let dd = Dispatch(presentation: presentation, binding: binding) as? GroupViewBuilding {
             return dd.build(model: model, id: id, builder: self)
         } else {
             return (id, EmptyView().erased)

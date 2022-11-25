@@ -10,6 +10,10 @@ extension FieldPresenting where Self.Value: CustomFieldPresentable {
     public static func `default`() -> Self where Self == Self.Value.PreferredPresentation { Self.Value.preferredPresentation }
 }
 
+public protocol GroupPresenting<Value>: FieldPresenting {
+    func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel?
+}
+
 public struct FieldPresentations {
     /* namespace */
 }
@@ -17,10 +21,10 @@ public struct FieldPresentations {
 // MARK: - GroupPresentation
 
 extension FieldPresentations {
-    public enum Group<Value>: FieldPresenting {
+    public enum Group<Value>: GroupPresenting, Equatable {
         public typealias Value = Value
         
-        public struct Section {
+        public struct Section: Equatable {
             public let caption: String?
             
             public init(caption: String?) {
@@ -30,7 +34,7 @@ extension FieldPresentations {
 
         case section(Section)
         
-        public struct Screen {
+        public struct Screen: Equatable {
             public init() {
                 // nothing
             }
@@ -38,13 +42,19 @@ extension FieldPresentations {
         
         case screen(Screen)
         
-        public struct Inline {
+        public struct Inline: Equatable {
             public init() {
                 // nothing
             }
         }
         
         case inline(Inline)
+        
+        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+            var model = FormModel(binding)
+            model.metadata = model.metadata.coalescing(with: metadata)
+            return model
+        }
     }
 }
 
@@ -194,41 +204,119 @@ extension FieldPresenting where Self == FieldPresentations.Toggle {
 // MARK: - PickerPresentation
 
 extension FieldPresentations {
-    public struct PickerStyle: Equatable {
-        private enum Represenation: Equatable {
-            case auto, inline, segments, selection, wheel, menu
+    public enum Picker<Value>: GroupPresenting where Value: Hashable {
+        public struct Style {
+            fileprivate enum Represenation {
+                case auto, segments, selection(Group<Value>), wheel, menu
+            }
+
+            public static var auto: Self { Self(representation: .auto) }
+            public static var segments: Self { Self(representation: .segments) }
+            public static var wheel: Self { Self(representation: .wheel) }
+            public static var selection: Self { Self(representation: .selection(.screen())) }
+            public static func selection(_ presentation: Group<Value> = .screen()) -> Self {
+                Self(representation: .selection(presentation))
+            }
+
+            @available(iOS 14.0, *)
+            public static var menu: Self { Self(representation: .menu) }
+        
+            fileprivate let representation: Represenation
         }
-
-        public static let auto = Self(representation: .auto)
-        public static let inline = Self(representation: .inline)
-        public static let segments = Self(representation: .segments)
-        public static let selection = Self(representation: .selection)
-        public static let wheel = Self(representation: .wheel)
-
-        @available(iOS 14.0, *)
-        public static let menu = Self(representation: .menu)
-    
-        private let representation: Represenation
-    }
-
-    public struct Picker<Value>: FieldPresenting where Value: Hashable {
+        
         public typealias Value = Value
         
-        public var style: PickerStyle
-        public var values: [Value]
-        public var deselectionValue: Value?
+        public struct Data {
+            public let values: [Value]
+            public let deselectionValue: Value?
+            
+            internal init(values: some Sequence<Value>, deselectionValue: Value?) {
+                self.values = Array(values)
+                self.deselectionValue = deselectionValue
+            }
+        }
         
-        public init(style: PickerStyle, values: some Sequence<Value>, deselectionValue: Value?) {
-            self.style = style
-            self.values = Array(values)
-            self.deselectionValue = deselectionValue
+        public struct Auto {
+            public let data: Data
+        }
+                
+        public struct Segments {
+            public let data: Data
+        }
+        
+        public struct Selection {
+            public let data: Data
+            public let presentation: (any GroupPresenting<Value>)?
+        }
+        
+        public struct Wheel {
+            public let data: Data
+        }
+        
+        public struct Menu {
+            public let data: Data
+        }
+        
+        case auto(Auto)
+        case segments(Segments)
+        case selection(Selection)
+        case wheel(Wheel)
+        case menu(Menu)
+        
+        public var data: Data {
+            switch self {
+            case .auto(let content):
+                return content.data
+            case .segments(let content):
+                return content.data
+            case .selection(let content):
+                return content.data
+            case .wheel(let content):
+                return content.data
+            case .menu(let content):
+                return content.data
+            }
+        }
+
+        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+            guard case .selection(let content) = self else { return nil }
+            if let group = content.presentation as? Group<Value>, case .inline = group { return nil }
+            return .init(name: metadata.name, icon: metadata.icon) {
+                .field(
+                    binding,
+                    metadata: metadata,
+                    presentation: Picker.selection(.init(data: self.data, presentation: nil))
+                )
+            }
+        }
+        
+        @usableFromInline
+        internal init(style: Style, values: some Sequence<Value>, deselectionValue: Value?) {
+            let data = Data(values: values, deselectionValue: deselectionValue)
+            switch style.representation {
+            case .auto:
+                self = .auto(.init(data: data))
+                break
+            case .segments:
+                self = .segments(.init(data: data))
+                break
+            case .selection(let group):
+                self = .selection(.init(data: data, presentation: group))
+                break
+            case .wheel:
+                self = .wheel(.init(data: data))
+                break
+            case .menu:
+                self = .menu(.init(data: data))
+                break
+            }
         }
     }
 }
 
 extension FieldPresenting where Value: CaseIterable & Hashable {
     @inlinable
-    public static func picker<T>(style: FieldPresentations.PickerStyle = .auto) -> Self where
+    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto) -> Self where
         Self == FieldPresentations.Picker<T>,
         T == Value
     {
@@ -236,7 +324,7 @@ extension FieldPresenting where Value: CaseIterable & Hashable {
     }
 
     @inlinable
-    public static func picker<T>(style: FieldPresentations.PickerStyle = .auto, deselectUsingValue value: Value) -> Self where
+    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto, deselectUsingValue value: Value) -> Self where
         Self == FieldPresentations.Picker<T>,
         T == Value
     {
@@ -246,7 +334,7 @@ extension FieldPresenting where Value: CaseIterable & Hashable {
 
 extension FieldPresenting where Value: _OptionalProtocol & Hashable, Value.Wrapped: CaseIterable {
     @inlinable
-    public static func picker<T>(style: FieldPresentations.PickerStyle = .auto) -> Self where
+    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto) -> Self where
         Self == FieldPresentations.Picker<T>,
         T == Value
     {
@@ -254,7 +342,7 @@ extension FieldPresenting where Value: _OptionalProtocol & Hashable, Value.Wrapp
     }
 
     @inlinable
-    public static func picker<T>(style: FieldPresentations.PickerStyle = .auto, deselectUsingValue value: Value) -> Self where
+    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto, deselectUsingValue value: Value) -> Self where
         Self == FieldPresentations.Picker<T>,
         T == Value
     {
@@ -265,7 +353,7 @@ extension FieldPresenting where Value: _OptionalProtocol & Hashable, Value.Wrapp
 extension FieldPresenting where Value: Hashable {
     @inlinable
     public static func picker<T>(
-        style: FieldPresentations.PickerStyle = .auto,
+        style: FieldPresentations.Picker<T>.Style = .auto,
         cases: Value...
     ) -> Self where
         Self == FieldPresentations.Picker<T>,
@@ -276,7 +364,7 @@ extension FieldPresenting where Value: Hashable {
 
     @inlinable
     public static func picker<T>(
-        style: FieldPresentations.PickerStyle = .auto,
+        style: FieldPresentations.Picker<T>.Style = .auto,
         cases: Value...,
         deselectUsing value: Value
     ) -> Self where
@@ -546,3 +634,20 @@ extension FieldPresenting {
         .matching(.init(wrapped: self, nilValue: value))
     }
 }
+
+// MARK: - EitherPresentation
+
+extension FieldPresentations {
+    public enum EitherPresentation<First, Second>: FieldPresenting
+    where
+        First: FieldPresenting,
+        Second: FieldPresenting,
+        First.Value == Second.Value
+    {
+        public typealias Value = First.Value
+                
+        case first(First)
+        case second(Second)
+    }
+}
+
