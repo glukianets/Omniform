@@ -29,8 +29,7 @@ public protocol FieldVisiting<Result> {
     func visit<Value>(
         group: FormModel,
         id: AnyHashable,
-        using presentation:
-        some FieldPresenting<Value>,
+        using presentation: some FieldPresenting<Value>,
         through binding: some ValueBinding<Value>
     ) -> Result
 }
@@ -38,24 +37,43 @@ public protocol FieldVisiting<Result> {
 // MARK: - CustomFieldsContaining
 
 public protocol CustomFormPresentable: CustomFieldPresentable {
-    static var dataModelTitle: String { get }
-    
-    static func dataModel(through binding: any ValueBinding<Self>) -> FormModel?
+    static func formModel(for binding: some ValueBinding<Self>) -> FormModel
 }
 
 extension CustomFormPresentable {
     public static var preferredPresentation: FieldPresentations.Group<Self> {
-        .screen(.init())
+        .section()
     }
 }
 
-extension CustomFormPresentable {
-    public static var dataModelTitle: String {
-        String(describing: Self.self)
+extension CustomFormPresentable where Self: CustomFormBuilding {
+    public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
+        let builder: () -> FormModel.Prototype = { self.buildForm(binding) }
+        return FormModel(name: self.formName, icon: self.formIcon, builder: builder)
     }
+}
 
-    public static func dataModel(through binding: any ValueBinding<Self>) -> FormModel? {
+// MARK: - CustomFieldsBuilding
+
+public protocol CustomFormBuilding: CustomFormPresentable {
+    static var formName: Metadata.Text? { get }
+    static var formIcon: Metadata.Image? { get }
+    
+    @FormModel.Builder
+    static func buildForm(_ binding: some ValueBinding<Self>) -> FormModel.Prototype
+}
+
+extension CustomFormBuilding {
+    public static var formName: Metadata.Text? {
+        .runtime(self)
+    }
+    
+    public static var formIcon: Metadata.Image? {
         nil
+    }
+    
+    public static func buildForm(_ binding: some ValueBinding<Self>) -> FormModel.Prototype {
+        .init(dynamicallyInspecting: binding, options: .default)
     }
 }
 
@@ -160,6 +178,12 @@ extension UInt64: CustomFieldPresentable {
 extension Optional: CustomFieldPresentable where Wrapped: CustomFieldPresentable & Equatable & _DefaultInitializable {
     public static var preferredPresentation: FieldPresentations.Nullified<Self, Wrapped.PreferredPresentation> {
         Wrapped.preferredPresentation.nullifying(when: Wrapped.init())
+    }
+}
+
+extension CustomFieldPresentable where Self: Hashable & CaseIterable {
+    public static var preferredPresentation: FieldPresentations.Picker<Self> {
+        .picker()
     }
 }
 

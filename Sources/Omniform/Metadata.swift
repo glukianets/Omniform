@@ -161,6 +161,14 @@ extension Metadata {
                 return text.key
             }
         }
+        
+        internal static func runtime<S: StringProtocol>(_ value: S) -> Self {
+            .verbatim(String(value).dropPrefix("_").humanReadable)
+        }
+        
+        internal static func runtime<T>(_ type: T.Type) -> Self {
+            .runtime(String(describing: type))
+        }
 
         public static func verbatim<S: StringProtocol>(_ value: S) -> Self {
             .text(.init(key: String(value), table: nil, bundle: nil, options: []))

@@ -9,7 +9,7 @@ public struct Omniform: View {
     private let model: FormModel
     
     public init(_ binding: some ValueBinding) {
-        self.init(model: FormModel(through: binding))
+        self.init(model: FormModel(for: binding))
     }
     
     public init(model: FormModel) {
@@ -71,7 +71,7 @@ public struct OmniformView: View {
     private var model: FormModel
     
     public init(_ binding: some ValueBinding) {
-        self.init(model: FormModel(through: binding))
+        self.init(model: FormModel(for: binding))
     }
     
     public init(model: FormModel) {
