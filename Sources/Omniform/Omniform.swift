@@ -42,13 +42,14 @@ public protocol CustomFormPresentable: CustomFieldPresentable {
 
 extension CustomFormPresentable {
     public static var preferredPresentation: FieldPresentations.Group<Self> {
-        .screen(.init())
+        .section()
     }
 }
 
 extension CustomFormPresentable where Self: CustomFormBuilding {
     public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
-        FormModel(name: self.formName, icon: self.formIcon, binding: binding, self.buildForm(_:))
+        let builder: () -> FormModel.Prototype = { self.buildForm(binding) }
+        return FormModel(name: self.formName, icon: self.formIcon, builder: builder)
     }
 }
 
@@ -177,6 +178,12 @@ extension UInt64: CustomFieldPresentable {
 extension Optional: CustomFieldPresentable where Wrapped: CustomFieldPresentable & Equatable & _DefaultInitializable {
     public static var preferredPresentation: FieldPresentations.Nullified<Self, Wrapped.PreferredPresentation> {
         Wrapped.preferredPresentation.nullifying(when: Wrapped.init())
+    }
+}
+
+extension CustomFieldPresentable where Self: Hashable & CaseIterable {
+    public static var preferredPresentation: FieldPresentations.Picker<Self> {
+        .picker()
     }
 }
 
