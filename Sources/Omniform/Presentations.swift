@@ -290,7 +290,7 @@ extension FieldPresentations {
                 .field(
                     binding,
                     metadata: metadata,
-                    presentation: Picker.selection(.init(data: self.data, presentation: nil))
+                    ui: Picker.selection(.init(data: self.data, presentation: nil))
                 )
             }
         }

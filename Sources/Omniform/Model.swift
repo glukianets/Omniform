@@ -128,7 +128,7 @@ public struct FormModel {
                 return model.filtered(using: query).flatMap {
                     !$0.members.isEmpty ? FormModel.Member.group(
                         model: $0,
-                        presentation: FieldPresentations.Group<FormModel>.section(),
+                        ui: FieldPresentations.Group<FormModel>.section(),
                         binding: bind(value: $0)
                     ).with(id: id).representation : nil
                 }
@@ -362,22 +362,22 @@ extension FormModel {
                 
         public static func group(
             model: FormModel,
-            presentation: FieldPresentations.Group<FormModel> = .section()
+            ui presentation: FieldPresentations.Group<FormModel> = .section()
         ) -> Self {
             .group(
                 model: model,
-                presentation: presentation,
+                ui: presentation,
                 binding: bind(value: model)
             )
         }
         
         public static func group<T>(
             binding: any ValueBinding<T>,
-            presentation: some FieldPresenting<T>
+            ui presentation: some FieldPresenting<T>
         ) -> Self {
             .group(
                 model: FormModel(binding),
-                presentation: presentation,
+                ui: presentation,
                 binding: binding
             )
         }
@@ -385,20 +385,20 @@ extension FormModel {
         public static func group(
             name: Metadata.Text? = nil,
             icon: Metadata.Image? = nil,
-            presentation: FieldPresentations.Group<FormModel> = .section(),
+            ui presentation: FieldPresentations.Group<FormModel> = .section(),
             @Builder _ builder: () -> Prototype
         ) -> Self {
             let model = FormModel(name: name, icon: icon, prototype: builder())
             return .group(
                 model: model,
-                presentation: presentation,
+                ui: presentation,
                 binding: bind(value: model)
             )
         }
         
         internal static func group<T>( // Designated
             model: FormModel,
-            presentation: some FieldPresenting<T>,
+            ui presentation: some FieldPresenting<T>,
             binding: any ValueBinding<T>
         ) -> Self {
             .init(representation: .group(
@@ -412,12 +412,12 @@ extension FormModel {
             _ binding: any ValueBinding<T>,
             name: Metadata.Text? = nil,
             icon: Metadata.Image? = nil,
-            presentation: some FieldPresenting<T>
+            ui presentation: some FieldPresenting<T>
         ) -> Self {
             .field(
                 binding,
                 metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
-                presentation: presentation
+                ui: presentation
             )
         }
         
@@ -429,14 +429,14 @@ extension FormModel {
             .field(
                 binding,
                 metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
-                presentation: T.preferredPresentation
+                ui: T.preferredPresentation
             )
         }
         
         public static func field<T>( // Designated
             _ binding: any ValueBinding<T>,
             metadata: Metadata,
-            presentation: any FieldPresenting<T>
+            ui presentation: any FieldPresenting<T>
         ) -> Self {
             .init(representation: .field(
                 metadata,
@@ -452,7 +452,7 @@ extension FormModel {
             .field(
                 binding,
                 metadata: metadata,
-                presentation: T.preferredPresentation
+                ui: T.preferredPresentation
             )
         }
 

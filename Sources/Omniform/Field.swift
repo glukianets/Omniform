@@ -19,13 +19,13 @@ public struct Field<WrappedValue>: FieldProtocol {
     ///   - wrappedValue: The initial value of the underlying property
     ///   - name: Display name used for the field
     ///   - icon: Image used as Icon for the field
-    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - ui: Presentation of the field: kind of ui used to edit the field
     ///   - tags: Arbitrary tag values
     public init(
         wrappedValue: WrappedValue,
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
-        presentation: some FieldPresenting<WrappedValue>,
+        ui presentation: some FieldPresenting<WrappedValue>,
         tags: AnyHashable...
     ) {
         self.wrappedValue = wrappedValue
@@ -50,7 +50,7 @@ extension Field {
             wrappedValue: .init(),
             name: name,
             icon: icon,
-            presentation: WrappedValue.preferredPresentation,
+            ui: WrappedValue.preferredPresentation,
             tags: tags
         )
     }
@@ -72,7 +72,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: WrappedValue.preferredPresentation,
+            ui: WrappedValue.preferredPresentation,
             tags: tags
         )
     }
@@ -81,20 +81,20 @@ extension Field {
     /// - Parameters:
     ///   - name: Display name used for the field
     ///   - icon: Image used as Icon for the field
-    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - ui: Presentation of the field: kind of ui used to edit the field
     ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
-        presentation: some FieldPresenting<WrappedValue>,
+        ui presentation: some FieldPresenting<WrappedValue>,
         tags: AnyHashable...
     ) where WrappedValue: _DefaultInitializable {
         self.init(
             wrappedValue: .init(),
             name: name,
             icon: icon,
-            presentation: presentation,
+            ui: presentation,
             tags: tags
         )
     }
@@ -121,7 +121,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: WrappedValue.WrappedValue.preferredPresentation.lifting(
+            ui: WrappedValue.WrappedValue.preferredPresentation.lifting(
                 through: \.wrappedValue
             ),
             tags: tags
@@ -133,14 +133,14 @@ extension Field {
     ///   - wrappedValue: The initial value of the underlying property
     ///   - name: Display name used for the field
     ///   - icon: Image used as Icon for the field
-    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - ui: Presentation of the field: kind of ui used to edit the field
     ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
-        presentation: some FieldPresenting<WrappedValue.WrappedValue>,
+        ui presentation: some FieldPresenting<WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
         WrappedValue: PropertyWrapper
@@ -149,7 +149,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: presentation.lifting(
+            ui: presentation.lifting(
                 through: \WrappedValue.wrappedValue
             ),
             tags: tags
@@ -176,7 +176,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: WrappedValue.WrappedValue.preferredPresentation.lifting(through: \.wrappedValue),
+            ui: WrappedValue.WrappedValue.preferredPresentation.lifting(through: \.wrappedValue),
             tags: tags
         )
     }
@@ -186,14 +186,14 @@ extension Field {
     ///   - wrappedValue: The initial value of the underlying property
     ///   - name: Display name used for the field
     ///   - icon: Image used as Icon for the field
-    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - ui: Presentation of the field: kind of ui used to edit the field
     ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
-        presentation: some FieldPresenting<WrappedValue.WrappedValue>,
+        ui presentation: some FieldPresenting<WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
         WrappedValue: WritablePropertyWrapper
@@ -202,7 +202,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: presentation.lifting(
+            ui: presentation.lifting(
                 through: \WrappedValue.wrappedValue as WritableKeyPath<WrappedValue, WrappedValue.WrappedValue>
             ),
             tags: tags
@@ -232,7 +232,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: WrappedValue.WrappedValue.WrappedValue.preferredPresentation.lifting(through: \.wrappedValue.wrappedValue),
+            ui: WrappedValue.WrappedValue.WrappedValue.preferredPresentation.lifting(through: \.wrappedValue.wrappedValue),
             tags: tags
         )
     }
@@ -242,14 +242,14 @@ extension Field {
     ///   - wrappedValue: The initial value of the underlying property
     ///   - name: Display name used for the field
     ///   - icon: Image used as Icon for the field
-    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - ui: Presentation of the field: kind of ui used to edit the field
     ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
-        presentation: some FieldPresenting<WrappedValue.WrappedValue.WrappedValue>,
+        ui presentation: some FieldPresenting<WrappedValue.WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
         WrappedValue: PropertyWrapper,
@@ -259,7 +259,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: presentation.lifting(
+            ui: presentation.lifting(
                 through: \WrappedValue.wrappedValue.wrappedValue
             ),
             tags: tags
@@ -287,7 +287,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: WrappedValue.WrappedValue.WrappedValue.preferredPresentation.lifting(through: \.wrappedValue.wrappedValue),
+            ui: WrappedValue.WrappedValue.WrappedValue.preferredPresentation.lifting(through: \.wrappedValue.wrappedValue),
             tags: tags
         )
     }
@@ -297,14 +297,14 @@ extension Field {
     ///   - wrappedValue: The initial value of the underlying property
     ///   - name: Display name used for the field
     ///   - icon: Image used as Icon for the field
-    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - ui: Presentation of the field: kind of ui used to edit the field
     ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
-        presentation: some FieldPresenting<WrappedValue.WrappedValue.WrappedValue>,
+        ui presentation: some FieldPresenting<WrappedValue.WrappedValue.WrappedValue>,
         tags: AnyHashable...
     ) where
         WrappedValue: WritablePropertyWrapper,
@@ -314,7 +314,7 @@ extension Field {
             wrappedValue: wrappedValue,
             name: name,
             icon: icon,
-            presentation: presentation.lifting(
+            ui: presentation.lifting(
                 through: \WrappedValue.wrappedValue.wrappedValue as WritableKeyPath<WrappedValue, WrappedValue.WrappedValue.WrappedValue>
             ),
             tags: tags
