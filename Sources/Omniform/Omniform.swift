@@ -2,6 +2,7 @@ import Foundation
 
 // MARK: - PropertyWrapper
 
+/// A typpe that acts as a read-only property wrapper
 public protocol PropertyWrapper {
     associatedtype WrappedValue
     
@@ -10,12 +11,16 @@ public protocol PropertyWrapper {
 
 // MARK: - WritablePropertyWrapper
 
+/// A type that acts as a writable property wrapper
 public protocol WritablePropertyWrapper: PropertyWrapper {
     var wrappedValue: WrappedValue { get set }
 }
 
 // MARK: - FieldVisiting
 
+/// A type that presents ``FormModel`` members in a uniform manner
+///
+/// See ``FormModel/fields(using:)`` for usage.
 public protocol FieldVisiting<Result> {
     associatedtype Result
     
@@ -36,6 +41,7 @@ public protocol FieldVisiting<Result> {
 
 // MARK: - CustomFieldsContaining
 
+/// A type that has customized ``FormModel`` representatoin
 public protocol CustomFormPresentable: CustomFieldPresentable {
     static func formModel(for binding: some ValueBinding<Self>) -> FormModel
 }
@@ -55,6 +61,10 @@ extension CustomFormPresentable where Self: CustomFormBuilding {
 
 // MARK: - CustomFieldsBuilding
 
+/// A type that builds its own custom ``FormModel`` representation
+///
+/// Conform to this protocol instead of ``CustomFieldPresentable`` when you only
+/// want to adjust a few separate things about how your type is presented as form
 public protocol CustomFormBuilding: CustomFormPresentable {
     static var formName: Metadata.Text? { get }
     static var formIcon: Metadata.Image? { get }
@@ -73,15 +83,20 @@ extension CustomFormBuilding {
     }
     
     public static func buildForm(_ binding: some ValueBinding<Self>) -> FormModel.Prototype {
-        .init(dynamicallyInspecting: binding, options: .default)
+        .init(reflecting: binding)
     }
 }
 
 // MARK: - FieldPresentable
 
+/// A type that is presentable inside ``FormModel``
+///
+/// ``FormModel`` will recognize properties of this type as viable fields even
+/// when they're not marked with ``Field`` property wrapper
 public protocol CustomFieldPresentable {
     associatedtype PreferredPresentation: FieldPresenting<Self>
     
+    /// Presentation that is used when none other is specified
     static var preferredPresentation: PreferredPresentation { get }
 }
 

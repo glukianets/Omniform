@@ -2,12 +2,9 @@ import Foundation
 
 // MARK: -
 
+/// A type that aids field resentation inside a form
 public protocol FieldPresenting<Value> {
     associatedtype Value
-}
-
-extension FieldPresenting where Self.Value: CustomFieldPresentable {
-    public static func `default`() -> Self where Self == Self.Value.PreferredPresentation { Self.Value.preferredPresentation }
 }
 
 public protocol GroupPresenting<Value>: FieldPresenting {
@@ -16,6 +13,14 @@ public protocol GroupPresenting<Value>: FieldPresenting {
 
 public struct FieldPresentations {
     /* namespace */
+}
+
+// MARK: - Default
+
+extension FieldPresenting where Self.Value: CustomFieldPresentable {
+    /// The same presentation that ``CustomFieldPresentable`` dictates
+    /// - Returns: ``CustomFieldPresentable``'s preferred presentation
+    public static func `default`() -> Self where Self == Self.Value.PreferredPresentation { Self.Value.preferredPresentation }
 }
 
 // MARK: - GroupPresentation

@@ -83,7 +83,7 @@ internal extension String {
 
 internal extension Metadata {
     var displayName: String {
-        self.name?.description ?? self.externalName ?? ""
+        self.name?.description ?? ""
     }
 }
 

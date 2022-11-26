@@ -6,12 +6,21 @@ internal protocol FieldProtocol: WritablePropertyWrapper {
     var presentation: any FieldPresenting<Self.WrappedValue> { get }
 }
 
+/// A property wrapper type that marks property as part of a dynamic form.
+/// You can use it to customize part of a dynamic form generated for the property it was applied to.
 @propertyWrapper
 public struct Field<WrappedValue>: FieldProtocol {
     public var wrappedValue: WrappedValue
     internal let metadata: SurrogateMetadata
     internal let presentation: any FieldPresenting<WrappedValue>
-
+    
+    /// Creates the property wrapper with set name, icon, presentation and tags
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - tags: Arbitrary tag values
     public init(
         wrappedValue: WrappedValue,
         name: Metadata.Text? = nil,
@@ -26,6 +35,11 @@ public struct Field<WrappedValue>: FieldProtocol {
 }
 
 extension Field {
+    /// Creates the property wrapper with set name, icon, and tags, using default presentation provided for thy type
+    /// - Parameters:
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         name: Metadata.Text? = nil,
@@ -41,6 +55,12 @@ extension Field {
         )
     }
     
+    /// Creates the property wrapper with set name, icon, and tags, using default presentation provided for thy type
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -57,6 +77,12 @@ extension Field {
         )
     }
     
+    /// Creates the property wrapper with set name, icon, presentation and tags
+    /// - Parameters:
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         name: Metadata.Text? = nil,
@@ -75,6 +101,12 @@ extension Field {
 }
 
 extension Field {
+    /// Creates the property wrapper with set name, icon and tags, using default presentation and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -96,6 +128,13 @@ extension Field {
         )
     }
     
+    /// Creates the property wrapper with set name, icon presentation and tags, and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -117,6 +156,12 @@ extension Field {
         )
     }
     
+    /// Creates the property wrapper with set name, icon and tags, using default presentation and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -136,6 +181,13 @@ extension Field {
         )
     }
     
+    /// Creates the property wrapper with set name, icon, presentation and tags and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -159,6 +211,12 @@ extension Field {
 }
 
 extension Field {
+    /// Creates the property wrapper with set name, icon and tags, using default presentation and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -179,6 +237,13 @@ extension Field {
         )
     }
 
+    /// Creates the property wrapper with set name, icon presentation and tags, and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -201,6 +266,12 @@ extension Field {
         )
     }
     
+    /// Creates the property wrapper with set name, icon and tags, using default presentation and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,
@@ -221,6 +292,13 @@ extension Field {
         )
     }
 
+    /// Creates the property wrapper with set name, icon, presentation and tags and targeting nested value
+    /// - Parameters:
+    ///   - wrappedValue: The initial value of the underlying property
+    ///   - name: Display name used for the field
+    ///   - icon: Image used as Icon for the field
+    ///   - presentation: Presentation of the field: kind of ui used to edit the field
+    ///   - tags: Arbitrary tag values
     @inlinable
     public init(
         wrappedValue: WrappedValue,

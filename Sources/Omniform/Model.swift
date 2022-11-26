@@ -2,11 +2,12 @@ import Foundation
 
 // MARK: - Model
 
+/// A dynamic form data model type
 public struct FormModel {
+    /// Dynamic form creation options
     public struct Options: OptionSet {
-        public static var includeUnmarked = Self(rawValue: 1 << 0)
-       
-        public static var `default`: Self = [.includeUnmarked]
+        /// When this flag is set, model ignores fields that aren't marked with ``Field`` property wrapper
+        public static var excludeUnmarked = Self(rawValue: 1 << 0)
         
         public var rawValue: UInt
 
@@ -38,10 +39,27 @@ public struct FormModel {
     }
     
     private static let cache = MirrorCache()
-
+    
+    /// This form's metadata
     public var metadata: Metadata
     private var members: [Record]
     
+    /// Builds a new model instance using convenient resultBuilder-based syntax
+    ///
+    /// You can call various static methods on ``Member`` to produce desired elements:
+    /// ```swift
+    /// FormModel(name: "To-do list") {
+    ///     .field(self.dataModel.$walkTheDog, name: "Walk the dog", presentaton: .toggle);
+    ///     .group(name: "Groceries") {
+    ///        .field(self.dataModel.$groceries.eggs, name: "Eggs");
+    ///        .field(self.dataModel.$groceries.milk, name: "Milk");
+    ///    }
+    /// }
+    /// ```
+    /// - Parameters:
+    ///   - name: name
+    ///   - icon: icon
+    ///   - builder: form builder
     public init(
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
@@ -52,12 +70,16 @@ public struct FormModel {
         self = .init(metadata: metadata, members: prototype.members)
     }
     
-    public init<S>(_ binding: some ValueBinding<S>, options: Options = .default) {
+    /// Builds a new form model instance by reflecting provided value binding
+    /// - Parameters:
+    ///   - binding: binding to the root value. Changes inside ui will be reflected back through it.
+    ///   - options: form building options. See ``Options`` for further explanation.
+    public init<S>(_ binding: some ValueBinding<S>, options: Options = []) {
         if let trampoline = CustomFormPresentableDispatch(type: S.self, binding: binding) as? CustomFormTrampoline {
             self = trampoline.form
         } else {
             let metadata = Metadata(type: S.self, id: \S.self, externalName: String(describing: S.self))
-            let members = Prototype(dynamicallyInspecting: binding, options: options).members
+            let members = Prototype(reflecting: binding, options: options).members
             self.init(metadata: metadata, members: members)
         }
     }
@@ -80,10 +102,21 @@ public struct FormModel {
         self.members = records
     }
     
+    /// Builds a collection of form fields elements
+    ///
+    /// Since forms doesn't store their fields in some uniform way, you have to provide your custom
+    /// ``FieldVisiting`` object that can represent them as a single type.
+    /// - Note The returned collection will call respective visitor members at each access.
+    ///
+    /// - Parameter visitor: visitor that builds elements from provided form fields
+    /// - Returns: a collection of elements built from this form's fields
     public func fields<Visitor: FieldVisiting>(using visitor: Visitor) -> some RandomAccessCollection<Visitor.Result> {
         FieldsCollection<Visitor>(model: self, visitor: visitor)
     }
-
+    
+    /// Filters a form to match seqrch query
+    /// - Parameter query: string to match with lose text search
+    /// - Returns: a derived form that only contains matching members or nil if nothing was found
     public func filtered(using query: String) -> Self? {
         guard !query.isEmpty else { return self }
 
@@ -103,6 +136,12 @@ public struct FormModel {
                 return nil
             }
         })
+    }
+}
+
+extension FormModel: CustomFormPresentable {
+    public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
+        binding.value
     }
 }
 
@@ -198,7 +237,6 @@ private extension FieldProtocol {
 extension Metadata {
     fileprivate func matches(query: String) -> Bool {
         return self.name?.description.localizedStandardContains(query) ?? false
-            || self.externalName?.localizedCaseInsensitiveContains(query) ?? false
     }
 }
 
@@ -238,14 +276,6 @@ private struct CustomFormPresentableDispatch<T, B: ValueBinding<T>> {
 extension CustomFormPresentableDispatch: CustomFormTrampoline where T: CustomFormPresentable {
     var form: FormModel {
         self.type.formModel(for: self.binding)
-    }
-}
-
-// MARK: - Misc
-
-extension FormModel: CustomFormPresentable {
-    public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
-        binding.value
     }
 }
 
@@ -290,6 +320,7 @@ extension FormModel {
 // MARK: Prototype
 
 extension FormModel {
+    /// ``Builder`` result type
     public struct Prototype {
         fileprivate let members: [Member]
         
@@ -297,12 +328,18 @@ extension FormModel {
             self.members = members
         }
         
-        public init<S>(dynamicallyInspecting binding: some ValueBinding<S>, options: FormModel.Options) {
+        /// Create instace by inspecting the contents of provided binding
+        /// - Parameters:
+        ///   - binding: binding to a reflected value
+        ///   - options: form building options. See ``FormModel/Options`` for further explanation.
+        public init<S>(reflecting binding: some ValueBinding<S>, options: FormModel.Options = []) {
             let members: [Member] = FormModel.cache[for: S.self].children.compactMap { child in
                 if let type = type(of: child.keyPath).valueType as? any FieldProtocol.Type {
                     return type.build(from: binding, through: child.keyPath, name: child.label)
-                } else if options.contains(.includeUnmarked),
-                          let type = type(of: child.keyPath).valueType as? any CustomFieldPresentable.Type {
+                } else if
+                    !options.contains(.excludeUnmarked),
+                    let type = type(of: child.keyPath).valueType as? any CustomFieldPresentable.Type
+                {
                     return type.build(from: binding, through: child.keyPath, name: child.label)
                 } else {
                     return nil
@@ -317,6 +354,7 @@ extension FormModel {
 // MARK: Member
 
 extension FormModel {
+    /// ``Builder`` element type
     public struct Member {
         fileprivate struct NoID: Hashable {
             // nothing
@@ -436,6 +474,7 @@ extension FormModel {
 // MARK: - Builder
 
 extension FormModel {
+    /// resultBuilder type used in building models
     @resultBuilder public struct Builder {
         public static func buildBlock() -> Prototype {
             Prototype(members: [])
