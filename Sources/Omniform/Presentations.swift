@@ -30,9 +30,9 @@ extension FieldPresentations {
         public typealias Value = Value
         
         public struct Section: Equatable {
-            public let caption: String?
+            public let caption: Metadata.Text?
             
-            public init(caption: String?) {
+            public init(caption: Metadata.Text?) {
                 self.caption = caption
             }
         }
@@ -65,7 +65,7 @@ extension FieldPresentations {
 
 extension FieldPresenting {
     @inlinable
-    public static func section<T>(caption: String? = nil) -> Self where Self == FieldPresentations.Group<T> {
+    public static func section<T>(caption: Metadata.Text? = nil) -> Self where Self == FieldPresentations.Group<T> {
         .section(.init(caption: caption))
     }
 

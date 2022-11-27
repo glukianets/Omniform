@@ -8,7 +8,7 @@ internal struct MetadataImageView<Value>: View {
     @Binding private var value: Value
     private let image: Metadata.Image
     
-    public init(_ image: Metadata.Image, value: Binding<Value>) {
+    public init(_ image: Metadata.Image, value: Binding<Value> = .constant(())) {
         self._value = value
         self.image = image
     }
@@ -23,7 +23,7 @@ internal struct MetadataTextView<Value>: View {
     @Binding private var value: Value
     private let text: Metadata.Text
     
-    public init(_ text: Metadata.Text, value: Binding<Value>) {
+    public init(_ text: Metadata.Text, value: Binding<Value> = .constant(())) {
         self._value = value
         self.text = text
     }
@@ -43,7 +43,7 @@ internal struct MetadataLabel<Value>: View {
         self.init(text: metadata.name, image: metadata.icon, value: value)
     }
 
-    public init(text: Metadata.Text?, image: Metadata.Image?, value: Binding<Value>) {
+    public init(text: Metadata.Text?, image: Metadata.Image?, value: Binding<Value> = .constant(())) {
         self._value = value
         self.text = text
         self.image = image

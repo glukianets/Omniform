@@ -44,7 +44,7 @@ extension FieldPresentations.Group: SwiftUIGroupPresenting {
     
     private struct SectionView: View {
         let model: FormModel
-        let caption: String?
+        let caption: Metadata.Text?
         
         var body: some View {
             SwiftUI.Section {
@@ -53,7 +53,7 @@ extension FieldPresentations.Group: SwiftUIGroupPresenting {
                 MetadataLabel(self.model.metadata, value: .constant(model))
             } footer: {
                 if let caption = self.caption {
-                    Text(caption)
+                    MetadataTextView(caption)
                 } else {
                     EmptyView()
                 }
