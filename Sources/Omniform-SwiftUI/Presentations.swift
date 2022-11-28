@@ -211,8 +211,9 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting {
                 }
             }
             .textContentType(nil)
+#if os(iOS)
             .keyboardType(.asciiCapable)
-
+#endif
         }
     }
     
@@ -385,8 +386,10 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresent
                             }
                         }()
                     )
+#if os(iOS)
                 case .wheel where !canDeselect:
                     picker.pickerStyle(.wheel)
+#endif
                 case .menu where !canDeselect:
                     if #available(iOS 14, *) {
                         picker.pickerStyle(.menu)

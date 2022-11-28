@@ -16,6 +16,7 @@ public struct Omniform: View {
         self.model = model
     }
 
+#if os(iOS)
     public var body: some View {
         NavigationView {
             OmniformView(model: self.model)
@@ -30,6 +31,22 @@ public struct Omniform: View {
         .navigationViewStyle(.stack)
         .omniformPresentation(.navigation)
     }
+#elseif os(macOS)
+    public var body: some View {
+        NavigationView {
+            OmniformView(model: self.model)
+                .navigationTitle(self.model.metadata.displayName)
+//                .navigationBarItems(leading: Button { self.presentationMode.dismiss() } label: {
+//                    Image(systemName: "xmark.circle.fill")
+//                        .font(.system(size: 18, weight: .bold, design: .rounded))
+//                        .foregroundColor(.secondary)
+//                        .contentShape(Circle())
+//                })
+        }
+        .navigationViewStyle(.columns)
+        .omniformPresentation(.navigation)
+    }
+#endif
 }
 
 // MARK: - OmniformView
@@ -64,7 +81,11 @@ public struct OmniformView: View {
                     OmniformContentView(model: model)
                 }
             }
+#if os(iOS)
             .searchable(text: self.$query, placement: .navigationBarDrawer)
+#elseif os(macOS)
+            .searchable(text: self.$query, placement: .sidebar)
+#endif
         }
     }
     
@@ -87,7 +108,11 @@ public struct OmniformView: View {
             }
         }
         .scrollDismissesKeyboard(.immediately)
+#if os(iOS)
         .navigationBarTitle(self.model.metadata.displayName)
+#elseif os(macOS)
+        .navigationTitle(self.model.metadata.displayName)
+#endif
     }
 }
 

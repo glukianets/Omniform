@@ -37,12 +37,6 @@ public extension View {
 public protocol OmniformResourceResolving {
     func image(_ icon: Metadata.Image, value: some Any) -> Image
     
-#if os(iOS)
-    func uiImage(_ icon: Metadata.Image, value: some Any) -> UIImage
-#elseif os(macOS)
-    func nsImage(_ icon: Metadata.Image, value: some Any) -> NSImage
-#endif
-    
     func text(_ string: Metadata.Text, value: some Any) -> Text
     
     func string(_ string: Metadata.Text, value: some Any) -> String
@@ -52,16 +46,6 @@ extension OmniformResourceResolving {
     func image(_ icon: Metadata.Image) -> Image {
         self.image(icon, value: ())
     }
-    
-#if os(iOS)
-    func uiImage(_ icon: Metadata.Image) -> UIImage {
-        self.uiImage(icon, value: ())
-    }
-#elseif os(macOS)
-    func nsImage(_ icon: Metadata.Image) -> NSImage {
-        self.nsImage(icon, value: ())
-    }
-#endif
     
     func text(_ string: Metadata.Text) -> Text {
         self.text(string, value: ())
@@ -73,62 +57,25 @@ extension OmniformResourceResolving {
 }
 
 public extension OmniformResourceResolving {
-#if os(iOS)
     func image(_ icon: Metadata.Image, value: some Any) -> Image {
-        Image(uiImage: self.uiImage(icon, value: value))
-    }
-    
-    func uiImage(_ icon: Metadata.Image, value: some Any) -> UIImage {
-        var image: UIImage
-        
         switch icon {
         case .system(let content):
-            if #available(iOS 16.0, *), let value = content.value {
-                image = UIImage(systemName: content.name, variableValue: value) ?? UIImage()
+            if #available(iOS 16.0, macOS 13, *), let value = content.value {
+                return Image(systemName: content.name, variableValue: value)
             } else {
-                image = UIImage(systemName: content.name) ?? UIImage()
+                return Image(systemName: content.name)
             }
         case .custom(let content):
-            if #available(iOS 16.0, *), let value = content.value {
-                image = UIImage(named: content.name, in: content.bundle, variableValue: value)
-                    ?? .init(systemName: content.name, variableValue: value)
-                    ?? UIImage()
+            if #available(iOS 16.0, macOS 13, *), let value = content.value {
+                return Image(decorative: content.name, variableValue: value, bundle: content.bundle)
             } else {
-                image = UIImage(named: content.name, in: content.bundle, with: nil)
-                    ?? .init(systemName: content.name)
-                    ?? UIImage()
+                return Image(decorative: content.name, bundle: content.bundle)
             }
         case .native(let content):
-            image = UIImage(cgImage: content.image, scale: content.scale, orientation: content.orientation.uiKit)
+            return Image(decorative: content.image, scale: content.scale, orientation: content.orientation.swiftUI)
         }
+    }
         
-        return image.withRenderingMode(.alwaysTemplate)
-    }
-#elseif os(macOS)
-    func image(_ icon: Metadata.Image, value: some Any) -> Image {
-        Image(uiImage: self.nsImage(icon, value: value))
-    }
-
-    func nsImage(_ icon: Metadata.Image, value: some Any) -> NSImage {
-        switch icon {
-        case .system(let content):
-            if #available(iOS 16.0, *), let value = content.value {
-                return NSImage(systemName: content.name, variableValue: value) ?? NSImage()
-            } else {
-                return NSImage(systemName: content.name) ?? NSImage()
-            }
-        case .custom(let content):
-            if #available(iOS 16.0, *), let value = content.value {
-                return NSImage(named: content.name, in: content.bundle, variableValue: value) ?? NSImage()
-            } else {
-                return NSImage(named: content.name, in: content.bundle, with: nil) ?? NSImage()
-            }
-        case .native(let content):
-            return NSImage(cgImage: content.image, scale: content.scale, orientation: content.orientation.uiKit)
-        }
-    }
-#endif
-
     func text(_ string: Metadata.Text, value: some Any) -> Text {
         Text(verbatim: self.string(string, value: value))
     }
