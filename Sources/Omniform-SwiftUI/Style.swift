@@ -36,30 +36,104 @@ public extension View {
 
 public protocol OmniformResourceResolving {
     func image(_ icon: Metadata.Image, value: some Any) -> Image
+    
+#if os(iOS)
+    func uiImage(_ icon: Metadata.Image, value: some Any) -> UIImage
+#elseif os(macOS)
+    func nsImage(_ icon: Metadata.Image, value: some Any) -> NSImage
+#endif
+    
     func text(_ string: Metadata.Text, value: some Any) -> Text
+    
+    func string(_ string: Metadata.Text, value: some Any) -> String
+}
+
+extension OmniformResourceResolving {
+    func image(_ icon: Metadata.Image) -> Image {
+        self.image(icon, value: ())
+    }
+    
+#if os(iOS)
+    func uiImage(_ icon: Metadata.Image) -> UIImage {
+        self.uiImage(icon, value: ())
+    }
+#elseif os(macOS)
+    func nsImage(_ icon: Metadata.Image) -> NSImage {
+        self.nsImage(icon, value: ())
+    }
+#endif
+    
+    func text(_ string: Metadata.Text) -> Text {
+        self.text(string, value: ())
+    }
+
+    func string(_ string: Metadata.Text) -> String {
+        self.string(string, value: ())
+    }
 }
 
 public extension OmniformResourceResolving {
+#if os(iOS)
     func image(_ icon: Metadata.Image, value: some Any) -> Image {
-        switch icon {
-        case .system(let content):
-            if #available(iOS 16.0, *) {
-                return Image(systemName: content.name, variableValue: content.value)
-            } else {
-                return Image(systemName: content.name)
-            }
-        case .custom(let content):
-            if #available(iOS 16.0, *) {
-                return Image(decorative: content.name, variableValue: content.value)
-            } else {
-                return Image(decorative: content.name)
-            }
-        case .native(let content):
-            return Image(decorative: content.image, scale: content.scale, orientation: content.orientation.swiftUI)
-        }
+        Image(uiImage: self.uiImage(icon, value: value))
     }
     
+    func uiImage(_ icon: Metadata.Image, value: some Any) -> UIImage {
+        var image: UIImage
+        
+        switch icon {
+        case .system(let content):
+            if #available(iOS 16.0, *), let value = content.value {
+                image = UIImage(systemName: content.name, variableValue: value) ?? UIImage()
+            } else {
+                image = UIImage(systemName: content.name) ?? UIImage()
+            }
+        case .custom(let content):
+            if #available(iOS 16.0, *), let value = content.value {
+                image = UIImage(named: content.name, in: content.bundle, variableValue: value)
+                    ?? .init(systemName: content.name, variableValue: value)
+                    ?? UIImage()
+            } else {
+                image = UIImage(named: content.name, in: content.bundle, with: nil)
+                    ?? .init(systemName: content.name)
+                    ?? UIImage()
+            }
+        case .native(let content):
+            image = UIImage(cgImage: content.image, scale: content.scale, orientation: content.orientation.uiKit)
+        }
+        
+        return image.withRenderingMode(.alwaysTemplate)
+    }
+#elseif os(macOS)
+    func image(_ icon: Metadata.Image, value: some Any) -> Image {
+        Image(uiImage: self.nsImage(icon, value: value))
+    }
+
+    func nsImage(_ icon: Metadata.Image, value: some Any) -> NSImage {
+        switch icon {
+        case .system(let content):
+            if #available(iOS 16.0, *), let value = content.value {
+                return NSImage(systemName: content.name, variableValue: value) ?? NSImage()
+            } else {
+                return NSImage(systemName: content.name) ?? NSImage()
+            }
+        case .custom(let content):
+            if #available(iOS 16.0, *), let value = content.value {
+                return NSImage(named: content.name, in: content.bundle, variableValue: value) ?? NSImage()
+            } else {
+                return NSImage(named: content.name, in: content.bundle, with: nil) ?? NSImage()
+            }
+        case .native(let content):
+            return NSImage(cgImage: content.image, scale: content.scale, orientation: content.orientation.uiKit)
+        }
+    }
+#endif
+
     func text(_ string: Metadata.Text, value: some Any) -> Text {
+        Text(verbatim: self.string(string, value: value))
+    }
+
+    func string(_ string: Metadata.Text, value: some Any) -> String {
         switch string {
         case .text(let content):
             var result: String
@@ -79,8 +153,7 @@ public extension OmniformResourceResolving {
             } else if content.options.contains([.formattable]) {
                 result = String(format: result, [value])
             }
-
-            return Text(verbatim: result)
+            return result
         }
     }
 }
@@ -125,6 +198,29 @@ private extension Metadata.Image.Orientation {
             return .rightMirrored
         }
     }
+    
+#if os(iOS)
+    var uiKit: UIImage.Orientation {
+        switch self {
+        case .up(false):
+            return .up
+        case .up(true):
+            return .upMirrored
+        case .down(false):
+            return .down
+        case .down(true):
+            return .downMirrored
+        case .left(false):
+            return .left
+        case .left(true):
+            return .leftMirrored
+        case .right(false):
+            return .right
+        case .right(true):
+            return .rightMirrored
+        }
+    }
+#endif
 }
 
 

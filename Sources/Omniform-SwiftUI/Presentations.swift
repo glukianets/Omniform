@@ -192,21 +192,91 @@ extension FieldPresentations.Toggle: SwiftUIFieldPresenting {
 // MARK: - TextInput
 
 extension FieldPresentations.TextInput: SwiftUIFieldPresenting {
-    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        let binding = binding.map { $0.description } set: { Value($0) }
+    private struct PlainTextInput: View {
+        @Environment(\.omniformResourceResolver) var resourceResolver
+        var metadata: Metadata
+        @Binding var value: String
         
-        return SwiftUI.Group {
+        var body: some View {
+            SwiftUI.Group {
+                if #available(iOS 15.0, *) {
+                    SwiftUI.TextField(text: self.$value) {
+                        metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                    }
+                } else {
+                    SwiftUI.TextField<Text>(
+                        metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
+                        text: self.$value
+                    )
+                }
+            }
+            .textContentType(nil)
+            .keyboardType(.asciiCapable)
+
+        }
+    }
+    
+    private struct SecureTextInput: View {
+        @Environment(\.omniformResourceResolver) var resourceResolver
+        var metadata: Metadata
+        @Binding var value: String
+        
+        var body: some View {
+            if #available(iOS 15.0, *) {
+                SwiftUI.SecureField(text: self.$value) {
+                    metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                }
+            } else {
+                SwiftUI.SecureField(
+                    metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
+                    text: self.$value
+                )
+            }
+        }
+    }
+
+    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+        Group {
             switch self {
+            case .plain:
+                let binding = binding.map { $0.description } set: { Value($0) }
+                PlainTextInput(metadata: field, value: binding.forSwiftUI).erased
             case .secure:
-                SwiftUI.SecureField<Text>(field.displayName, text: binding.forSwiftUI)
-            case .regular:
-                SwiftUI.TextField<Text>(field.displayName, text: binding.forSwiftUI)
-                    .textContentType(nil)
-                    .keyboardType(.asciiCapable)
+                let binding = binding.map { $0.description } set: { Value($0) }
+                SecureTextInput(metadata: field, value: binding.forSwiftUI)
             }
         }.erased
     }
 }
+
+extension FieldPresentations.FormatInput: SwiftUIFieldPresenting {
+    private struct FormattedTextInput: View {
+        @Environment(\.omniformResourceResolver) var resourceResolver
+        var metadata: Metadata
+        var format: AnyParseableFormatStyle<Value, String>
+        @Binding var value: Value
+        
+        var body: some View {
+            if #available(iOS 15.0, *) {
+                SwiftUI.TextField(value: self.$value, format: self.format) {
+                    self.resourceResolver.text(metadata.name ?? "?")
+                }
+            } else {
+                EmptyView()
+            }
+        }
+    }
+
+    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+        Group {
+            switch self {
+            case .format(let content):
+                FormattedTextInput(metadata: field, format: content.format, value: binding.forSwiftUI)
+            }
+        }.erased
+    }
+}
+
 
 // MARK: - Picker
 

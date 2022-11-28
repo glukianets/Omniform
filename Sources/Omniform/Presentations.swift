@@ -145,7 +145,7 @@ extension FieldPresentations {
     public enum TextInput<Value>: FieldPresenting where Value: LosslessStringConvertible {
         public typealias Value = Value
        
-        public struct Regular {
+        public struct Plain {
             public init() {
                 // nothing
             }
@@ -157,8 +157,23 @@ extension FieldPresentations {
             }
         }
         
-        case regular(Regular = .init())
+        case plain(Plain = .init())
         case secure(Secure = .init())
+    }
+    
+    public enum FormatInput<Value>: FieldPresenting {
+        public typealias Value = Value
+
+        public struct Format {
+            public let format: AnyParseableFormatStyle<Value, String>
+
+            @available(iOS 15.0, *)
+            public init<F>(format: F) where F: ParseableFormatStyle, F.FormatInput == Value, F.FormatOutput == String {
+                self.format = .wrapping(format)
+            }
+        }
+        
+        case format(Format)
     }
 }
 
@@ -169,7 +184,7 @@ extension FieldPresenting where Value: LosslessStringConvertible {
         Self == FieldPresentations.TextInput<T>,
         Value == T
     {
-        secure ? .secure() : .regular()
+        secure ? .secure() : .plain()
     }
 }
 
@@ -181,7 +196,35 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
         Value == T,
         T.Wrapped: LosslessStringConvertible
     {
-        .nullifying(secure ? .secure() : .regular(), when: "")
+        .nullifying(secure ? .secure() : .plain(), when: "")
+    }
+}
+
+extension FieldPresenting {
+    @inlinable
+    @available(iOS 15.0, *)
+    public static func input<F>(format: F) -> Self
+    where
+        F: ParseableFormatStyle,
+        F.FormatOutput == String,
+        Self == FieldPresentations.FormatInput<F.FormatInput>
+    {
+        .format(.init(format: format))
+    }
+}
+
+extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringProtocol {
+    @inlinable
+    @available(iOS 15.0, *)
+    public static func input<T, F>(format: F) -> Self
+    where
+        Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.FormatInput<T>>,
+        Value == T,
+        F: ParseableFormatStyle,
+        F.FormatInput == T.Wrapped,
+        F.FormatOutput == String
+    {
+        .nullifying(.format(.init(format: format)), when: "")
     }
 }
 
