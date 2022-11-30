@@ -12,8 +12,8 @@ let package = Package(
             targets: ["Omniform"]
         ),
         .library(
-            name: "Omniform-SwiftUI",
-            targets: ["Omniform-SwiftUI"]
+            name: "OmniformUI",
+            targets: ["OmniformUI"]
         ),
 
     ],
@@ -26,7 +26,7 @@ let package = Package(
             dependencies: []
         ),
         .target(
-            name: "Omniform-SwiftUI",
+            name: "OmniformUI",
             dependencies: ["Omniform"]
         ),
         .testTarget(
