@@ -181,10 +181,15 @@ extension FieldPresenting where Value: LosslessStringConvertible {
     @inlinable
     public static func input<T>(secure: Bool = false) -> Self
     where
-        Self == FieldPresentations.TextInput<T>,
+//        Self == FieldPresentations.TextInput<T>,
+        Self == FieldPresentations.Grouped<FieldPresentations.Group<FieldPresentations.TextInput<T>.Value>, FieldPresentations.Grouped<FieldPresentations.Group<FieldPresentations.TextInput<T>.Value>, FieldPresentations.TextInput<T>>>,
         Value == T
     {
-        secure ? .secure() : .plain()
+        if secure {
+            return FieldPresentations.TextInput.secure().grouping(inside: .section()).grouping(inside: .screen())
+        } else {
+            return FieldPresentations.TextInput.plain().grouping(inside: .section()).grouping(inside: .screen())
+        }
     }
 }
 
@@ -699,3 +704,51 @@ extension FieldPresentations {
     }
 }
 
+// MARK: - GroupingPresentation
+
+extension FieldPresentations {
+    public struct Grouped<Group: GroupPresenting, Field: FieldPresenting>: GroupPresenting where Group.Value == Field.Value {
+        public typealias Value = Field.Value
+        public typealias Field = Field
+        public typealias Group = Group
+        
+        public let groupPresentation: Group?
+        public let fieldPresentation: Field
+        
+        public init(_ fieldPresentation: Field, inside groupPresenation: Group? = nil) {
+            self.groupPresentation = groupPresenation
+            self.fieldPresentation = fieldPresentation
+        }
+        
+        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+            if let group = self.groupPresentation as? FieldPresentations.Group<Value>, case .inline = group { return nil }
+
+            return .init(name: metadata.name, icon: metadata.icon) {
+                .field(binding, metadata: metadata, ui: self.fieldPresentation)
+            }
+        }
+    }
+}
+
+extension FieldPresenting {
+    public static func grouping<P, G>(
+        _ fieldPresentation: P,
+        inside groupPresenation: G
+    ) -> Self where
+        Self == FieldPresentations.Grouped<G, P>,
+        P: FieldPresenting,
+        G: GroupPresenting,
+        P.Value == G.Value
+    {
+        .init(fieldPresentation, inside: groupPresenation)
+    }
+    
+    public func grouping<G>(
+        inside groupPresenation: G
+    ) -> FieldPresentations.Grouped<G, Self> where
+        G: GroupPresenting,
+        Self.Value == G.Value
+    {
+        .init(self, inside: groupPresenation)
+    }
+}
