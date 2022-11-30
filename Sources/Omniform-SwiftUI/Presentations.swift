@@ -217,7 +217,7 @@ extension FieldPresentations.Toggle: SwiftUIFieldPresenting {
 
 // MARK: - TextInput
 
-extension FieldPresentations.TextInput: SwiftUIFieldPresenting {
+extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
     private struct PlainTextInput: View {
         @Environment(\.omniformResourceResolver) var resourceResolver
         var metadata: Metadata
@@ -336,6 +336,32 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         let binding = binding.map { $0.description } set: { Value($0) }
         return Content(metadata: field, binding: binding.forSwiftUI, presentation: self).erased
+    }
+    
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+        let style: Style
+        switch self {
+        case .plain(let content):
+            style = content.style
+        case .secure(let content):
+            style = content.style
+        }
+        
+        switch style {
+        case .inline:
+            fatalError("unreachable")
+        case .screen:
+            return FieldPresentations.Group<Value>.screen().body(for: model, id: id, builder: builder)
+        case .section:
+            return FieldPresentations.Group<Value>.section().body(for: model, id: id, builder: builder)
+        case .custom(let presentation):
+            if let swiftUIPresenting = presentation as? (any SwiftUIGroupPresenting) {
+                return swiftUIPresenting.body(for: model, id: id, builder: builder)
+            } else {
+                // TODO: implement through field presentation?
+                fatalError("unimplement")
+            }
+        }
     }
 }
 

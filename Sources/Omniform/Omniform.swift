@@ -190,6 +190,13 @@ extension UInt64: CustomFieldPresentable {
     }
 }
 
+@available(iOS 16.0, macOS 13, *)
+extension URL: CustomFieldPresentable {
+    public static var preferredPresentation: some FieldPresenting<Self> {
+        .input(format: .url)
+    }
+}
+
 extension Optional: CustomFieldPresentable where Wrapped: CustomFieldPresentable & Equatable & _DefaultInitializable {
     public static var preferredPresentation: FieldPresentations.Nullified<Self, Wrapped.PreferredPresentation> {
         Wrapped.preferredPresentation.nullifying(when: Wrapped.init())

@@ -142,23 +142,70 @@ extension FieldPresenting {
 // MARK: - InputPresentation
 
 extension FieldPresentations {
-    public enum TextInput<Value>: FieldPresenting where Value: LosslessStringConvertible {
+    public enum TextInput<Value>: GroupPresenting where Value: LosslessStringConvertible {
         public typealias Value = Value
+        
+        public enum Style {
+            case inline
+            case screen
+            case section
+            case custom(any GroupPresenting<Value>)
+        }
        
         public struct Plain {
-            public init() {
-                // nothing
+            public let style: Style
+            public let prompt: Metadata.Text?
+            
+            @usableFromInline
+            internal init(style: Style = .screen, prompt: Metadata.Text? = nil) {
+                self.style = style
+                self.prompt = prompt
             }
         }
         
         public struct Secure {
-            public init() {
-                // nothing
+            public let style: Style
+            public let prompt: Metadata.Text?
+            
+            @usableFromInline
+            internal init(style: Style = .screen, prompt: Metadata.Text? = nil) {
+                self.style = style
+                self.prompt = prompt
             }
         }
         
-        case plain(Plain = .init())
-        case secure(Secure = .init())
+        case plain(Plain)
+        case secure(Secure)
+        
+        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+            let style: Style
+            let prompt: Metadata.Text?
+            switch self {
+            case .plain(let content):
+                style = content.style
+                prompt = content.prompt
+            case .secure(let content):
+                style = content.style
+                prompt = content.prompt
+            }
+            
+            switch style {
+            case .inline:
+                return nil
+            case .screen:
+                return FormModel(name: metadata.name, icon: metadata.icon) {
+                    .group(ui: .section(caption: prompt)) {
+                        .field(binding, metadata: metadata, ui: self)
+                    }
+                }
+            case .section:
+                return FormModel(name: metadata.name, icon: metadata.icon) {
+                    .field(binding, metadata: metadata, ui: self)
+                }
+            case .custom(let presentation):
+                return presentation.makeForm(metadata: metadata, binding: binding)
+            }
+        }
     }
     
     public enum FormatInput<Value>: FieldPresenting {
@@ -179,29 +226,37 @@ extension FieldPresentations {
 
 extension FieldPresenting where Value: LosslessStringConvertible {
     @inlinable
-    public static func input<T>(secure: Bool = false) -> Self
-    where
-//        Self == FieldPresentations.TextInput<T>,
-        Self == FieldPresentations.Grouped<FieldPresentations.Group<FieldPresentations.TextInput<T>.Value>, FieldPresentations.Grouped<FieldPresentations.Group<FieldPresentations.TextInput<T>.Value>, FieldPresentations.TextInput<T>>>,
+    public static func input<T>(
+        secure: Bool = false,
+        presentation: Self.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
+        Self == FieldPresentations.TextInput<T>,
         Value == T
     {
         if secure {
-            return FieldPresentations.TextInput.secure().grouping(inside: .section()).grouping(inside: .screen())
+            return .secure(.init(style: presentation, prompt: prompt))
         } else {
-            return FieldPresentations.TextInput.plain().grouping(inside: .section()).grouping(inside: .screen())
+            return .plain(.init(style: presentation, prompt: prompt))
         }
     }
 }
 
 extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringProtocol {
     @inlinable
-    public static func input<T>(secure: Bool = false) -> Self
-    where
+    public static func input<T>(
+        secure: Bool = false,
+        presentation: Self.Presentation.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
         Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.TextInput<T>>,
-        Value == T,
-        T.Wrapped: LosslessStringConvertible
+        Value == T
     {
-        .nullifying(secure ? .secure() : .plain(), when: "")
+        if secure {
+            return .nullifying(.secure(.init(style: presentation, prompt: prompt)), when: "")
+        } else {
+            return .nullifying(.plain(.init(style: presentation, prompt: prompt)), when: "")
+        }
     }
 }
 
@@ -650,6 +705,7 @@ extension FieldPresentations {
         Value.Wrapped: Equatable
     {
         public typealias Value = Value
+        public typealias Presentation = Presentation
         
         public struct Matching {
             public var wrapped: Presentation
