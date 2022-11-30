@@ -4,13 +4,14 @@ import SwiftUI
 // MARK: - OmniformPresentation
 
 public struct OmniformPresentation: Equatable {
-    internal enum PresentationKind {
+    internal enum PresentationKind: Equatable {
         case standalone
-        case navigation
+        case navigation(isRoot: Bool = false)
     }
     
     public static var standalone: Self = Self(kind: .standalone)
-    public static var navigation: Self = Self(kind: .navigation)
+    public static var navigation: Self = Self(kind: .navigation())
+    public static func navigation(fromRoot: Bool) -> Self { .init(kind: .navigation(isRoot: fromRoot)) }
 
     internal let kind: PresentationKind
 }
@@ -36,30 +37,51 @@ public extension View {
 
 public protocol OmniformResourceResolving {
     func image(_ icon: Metadata.Image, value: some Any) -> Image
+    
     func text(_ string: Metadata.Text, value: some Any) -> Text
+    
+    func string(_ string: Metadata.Text, value: some Any) -> String
+}
+
+extension OmniformResourceResolving {
+    func image(_ icon: Metadata.Image) -> Image {
+        self.image(icon, value: ())
+    }
+    
+    func text(_ string: Metadata.Text) -> Text {
+        self.text(string, value: ())
+    }
+
+    func string(_ string: Metadata.Text) -> String {
+        self.string(string, value: ())
+    }
 }
 
 public extension OmniformResourceResolving {
     func image(_ icon: Metadata.Image, value: some Any) -> Image {
         switch icon {
         case .system(let content):
-            if #available(iOS 16.0, *) {
-                return Image(systemName: content.name, variableValue: content.value)
+            if #available(iOS 16.0, macOS 13, *), let value = content.value {
+                return Image(systemName: content.name, variableValue: value)
             } else {
                 return Image(systemName: content.name)
             }
         case .custom(let content):
-            if #available(iOS 16.0, *) {
-                return Image(decorative: content.name, variableValue: content.value)
+            if #available(iOS 16.0, macOS 13, *), let value = content.value {
+                return Image(decorative: content.name, variableValue: value, bundle: content.bundle)
             } else {
-                return Image(decorative: content.name)
+                return Image(decorative: content.name, bundle: content.bundle)
             }
         case .native(let content):
             return Image(decorative: content.image, scale: content.scale, orientation: content.orientation.swiftUI)
         }
     }
-    
+        
     func text(_ string: Metadata.Text, value: some Any) -> Text {
+        Text(verbatim: self.string(string, value: value))
+    }
+
+    func string(_ string: Metadata.Text, value: some Any) -> String {
         switch string {
         case .text(let content):
             var result: String
@@ -79,8 +101,7 @@ public extension OmniformResourceResolving {
             } else if content.options.contains([.formattable]) {
                 result = String(format: result, [value])
             }
-
-            return Text(verbatim: result)
+            return result
         }
     }
 }
@@ -125,6 +146,29 @@ private extension Metadata.Image.Orientation {
             return .rightMirrored
         }
     }
+    
+#if os(iOS)
+    var uiKit: UIImage.Orientation {
+        switch self {
+        case .up(false):
+            return .up
+        case .up(true):
+            return .upMirrored
+        case .down(false):
+            return .down
+        case .down(true):
+            return .downMirrored
+        case .left(false):
+            return .left
+        case .left(true):
+            return .leftMirrored
+        case .right(false):
+            return .right
+        case .right(true):
+            return .rightMirrored
+        }
+    }
+#endif
 }
 
 

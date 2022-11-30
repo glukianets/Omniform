@@ -101,92 +101,99 @@ public protocol CustomFieldPresentable {
 }
 
 extension Bool: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.Toggle {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .toggle
     }
 }
 
 extension String: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Character: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Float: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Double: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int8: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int16: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int32: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int64: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt8: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt16: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt32: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt64: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
+    }
+}
+
+@available(iOS 16.0, macOS 13, *)
+extension URL: CustomFieldPresentable {
+    public static var preferredPresentation: some FieldPresenting<Self> {
+        .input(format: .url)
     }
 }
 

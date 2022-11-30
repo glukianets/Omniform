@@ -142,46 +142,177 @@ extension FieldPresenting {
 // MARK: - InputPresentation
 
 extension FieldPresentations {
-    public enum TextInput<Value>: FieldPresenting where Value: LosslessStringConvertible {
+    public enum TextInput<Value>: GroupPresenting {
         public typealias Value = Value
+        
+        public enum Style {
+            case inline
+            case screen
+            case section
+            case custom(any GroupPresenting<Value>)
+        }
        
-        public struct Regular {
-            public init() {
-                // nothing
+        public struct Plain {
+            public let style: Style
+            public let prompt: Metadata.Text?
+            private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
+            
+            @usableFromInline
+            internal init(style: Style = .screen, prompt: Metadata.Text? = nil)
+            where Value: LosslessStringConvertible
+            {
+                self.style = style
+                self.prompt = prompt
+                self.rebinder = { $0.map { $0.description } set: { Value($0) } }
+            }
+            
+            public func lower(binding: some ValueBinding<Value>) -> any ValueBinding<String> {
+                self.rebinder(binding)
             }
         }
         
         public struct Secure {
-            public init() {
-                // nothing
+            public let style: Style
+            public let prompt: Metadata.Text?
+            private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
+            
+            @usableFromInline
+            internal init(style: Style = .screen, prompt: Metadata.Text? = nil)
+            where Value: LosslessStringConvertible
+            {
+                self.style = style
+                self.prompt = prompt
+                self.rebinder = { $0.map { $0.description } set: { Value($0) } }
+            }
+
+            public func lower(binding: some ValueBinding<Value>) -> any ValueBinding<String> {
+                self.rebinder(binding)
             }
         }
         
-        case regular(Regular = .init())
-        case secure(Secure = .init())
+        public struct Format {
+            public let format: AnyParseableFormatStyle<Value, String>
+            public let style: Style
+            public let prompt: Metadata.Text?
+
+            @available(iOS 15.0, *)
+            public init<F>(
+                format: F,
+                style: Style = .screen,
+                prompt: Metadata.Text? = nil
+            ) where F: ParseableFormatStyle, F.FormatInput == Value, F.FormatOutput == String {
+                self.style = style
+                self.prompt = prompt
+                self.format = .wrapping(format)
+            }
+        }
+        
+        case plain(Plain)
+        case secure(Secure)
+        case format(Format)
+        
+        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+            let style: Style
+            let prompt: Metadata.Text?
+            switch self {
+            case .plain(let content):
+                style = content.style
+                prompt = content.prompt
+            case .secure(let content):
+                style = content.style
+                prompt = content.prompt
+            case .format(let content):
+                style = content.style
+                prompt = content.prompt
+            }
+            
+            switch style {
+            case .inline:
+                return nil
+            case .screen:
+                return FormModel(name: metadata.name, icon: metadata.icon) {
+                    .group(ui: .section(caption: prompt)) {
+                        .field(binding, metadata: metadata, ui: self)
+                    }
+                }
+            case .section:
+                return FormModel(name: metadata.name, icon: metadata.icon) {
+                    .field(binding, metadata: metadata, ui: self)
+                }
+            case .custom(let presentation):
+                return presentation.makeForm(metadata: metadata, binding: binding)
+            }
+        }
     }
 }
 
 extension FieldPresenting where Value: LosslessStringConvertible {
     @inlinable
-    public static func input<T>(secure: Bool = false) -> Self
-    where
+    public static func input<T>(
+        secure: Bool = false,
+        presentation: Self.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
         Self == FieldPresentations.TextInput<T>,
         Value == T
     {
-        secure ? .secure() : .regular()
+        if secure {
+            return .secure(.init(style: presentation, prompt: prompt))
+        } else {
+            return .plain(.init(style: presentation, prompt: prompt))
+        }
     }
 }
 
 extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringProtocol {
     @inlinable
-    public static func input<T>(secure: Bool = false) -> Self
-    where
+    public static func input<T>(
+        secure: Bool = false,
+        presentation: Self.Presentation.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
+        Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.TextInput<T>>,
+        Value == T
+    {
+        if secure {
+            return .nullifying(.secure(.init(style: presentation, prompt: prompt)), when: "")
+        } else {
+            return .nullifying(.plain(.init(style: presentation, prompt: prompt)), when: "")
+        }
+    }
+}
+
+extension FieldPresenting {
+    @inlinable
+    @available(iOS 15.0, *)
+    public static func input<F>(
+        format: F,
+        presentation: Self.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
+        F: ParseableFormatStyle,
+        F.FormatOutput == String,
+        Self == FieldPresentations.TextInput<F.FormatInput>
+    {
+        .format(.init(format: format, style: presentation, prompt: prompt))
+    }
+}
+
+extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringProtocol {
+    @inlinable
+    @available(iOS 15.0, *)
+    public static func input<T, F>(
+        format: F,
+        presentation: Self.Presentation.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
         Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.TextInput<T>>,
         Value == T,
-        T.Wrapped: LosslessStringConvertible
+        F: ParseableFormatStyle,
+        F.FormatInput == T.Wrapped,
+        F.FormatOutput == String
     {
-        .nullifying(secure ? .secure() : .regular(), when: "")
+        .nullifying(.format(.init(format: format, style: presentation, prompt: prompt)), when: "")
     }
 }
 
@@ -602,6 +733,7 @@ extension FieldPresentations {
         Value.Wrapped: Equatable
     {
         public typealias Value = Value
+        public typealias Presentation = Presentation
         
         public struct Matching {
             public var wrapped: Presentation
@@ -656,3 +788,51 @@ extension FieldPresentations {
     }
 }
 
+// MARK: - GroupingPresentation
+
+extension FieldPresentations {
+    public struct Grouped<Group: GroupPresenting, Field: FieldPresenting>: GroupPresenting where Group.Value == Field.Value {
+        public typealias Value = Field.Value
+        public typealias Field = Field
+        public typealias Group = Group
+        
+        public let groupPresentation: Group?
+        public let fieldPresentation: Field
+        
+        public init(_ fieldPresentation: Field, inside groupPresenation: Group? = nil) {
+            self.groupPresentation = groupPresenation
+            self.fieldPresentation = fieldPresentation
+        }
+        
+        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+            if let group = self.groupPresentation as? FieldPresentations.Group<Value>, case .inline = group { return nil }
+
+            return .init(name: metadata.name, icon: metadata.icon) {
+                .field(binding, metadata: metadata, ui: self.fieldPresentation)
+            }
+        }
+    }
+}
+
+extension FieldPresenting {
+    public static func grouping<P, G>(
+        _ fieldPresentation: P,
+        inside groupPresenation: G
+    ) -> Self where
+        Self == FieldPresentations.Grouped<G, P>,
+        P: FieldPresenting,
+        G: GroupPresenting,
+        P.Value == G.Value
+    {
+        .init(fieldPresentation, inside: groupPresenation)
+    }
+    
+    public func grouping<G>(
+        inside groupPresenation: G
+    ) -> FieldPresentations.Grouped<G, Self> where
+        G: GroupPresenting,
+        Self.Value == G.Value
+    {
+        .init(self, inside: groupPresenation)
+    }
+}

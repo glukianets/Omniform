@@ -9,4 +9,5 @@
     - inline/outline representations
 2. .display() presentations
     - Formatters
+3. Handle nested .section()-s
 

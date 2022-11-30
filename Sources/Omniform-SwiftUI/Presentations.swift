@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Omniform
 
 public protocol SwiftUIFieldPresenting<Value>: FieldPresenting {
     associatedtype Body: SwiftUI.View
@@ -32,7 +33,7 @@ extension FieldPresentations.Group: SwiftUIGroupPresenting {
         let model: FormModel
         
         var body: some View {
-            if self.presentationKind == .navigation {
+            if self.presentationKind != .standalone {
                 NavigationLink(destination: DynamicView(OmniformView(model: model))) {
                     MetadataLabel(model.metadata, value: .constant(model))
                 }
@@ -76,6 +77,31 @@ extension FieldPresentations.Group: SwiftUIGroupPresenting {
         }
 
         return builder.visit(field: model.metadata, id: id, using: presentation, through: bind(value: model))
+    }
+}
+
+// MARK: - Grouped
+
+extension FieldPresentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting {
+    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+        if #available(iOS 16.0.0, *) {
+            guard let presentation = self.fieldPresentation as? any SwiftUIFieldPresenting<Value> else {
+                return EmptyView().erased
+            }
+            return presentation.body(for: field, binding: binding).erased
+        } else {
+            return EmptyView().erased
+        }
+    }
+    
+    public typealias Body = AnyView
+    
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+        if let presentation = self.groupPresentation as? any SwiftUIGroupPresenting {
+            return presentation.body(for: model, id: id, builder: builder)
+        } else {
+            fatalError("Unreachable?")
+        }
     }
 }
 
@@ -191,20 +217,137 @@ extension FieldPresentations.Toggle: SwiftUIFieldPresenting {
 
 // MARK: - TextInput
 
-extension FieldPresentations.TextInput: SwiftUIFieldPresenting {
-    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        let binding = binding.map { $0.description } set: { Value($0) }
+extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
+    private final class StateContainer: ObservableObject {
+        @Published public var text: String
         
-        return SwiftUI.Group {
-            switch self {
-            case .secure:
-                SwiftUI.SecureField<Text>(field.displayName, text: binding.forSwiftUI)
-            case .regular:
-                SwiftUI.TextField<Text>(field.displayName, text: binding.forSwiftUI)
-                    .textContentType(nil)
-                    .keyboardType(.asciiCapable)
+        public init(text: String) {
+            self.text = text
+        }
+    }
+    
+    private struct Content: View {
+        @Environment(\.omniformResourceResolver) var resourceResolver
+        var metadata: Metadata
+        var binding: any ValueBinding<Value>
+        var presentation: FieldPresentations.TextInput<Value>
+        @StateObject var state: StateContainer = StateContainer(text: "")
+        
+        public init(metadata: Metadata, binding: any ValueBinding<Value>, presentation: FieldPresentations.TextInput<Value>) {
+            self.metadata = metadata
+            self.binding = binding
+            self.presentation = presentation
+        }
+        
+        public var body: some View {
+            return HStack {
+                switch self.presentation {
+                case .plain(let content):
+                    let stringBinding = content.lower(binding: self.binding).forSwiftUI
+                    
+                    Group {
+                        if #available(iOS 15.0, *) {
+                            SwiftUI.TextField(text: self.$state.text) {
+                                metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                            }
+                        } else {
+                            SwiftUI.TextField<Text>(
+                                metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
+                                text: self.$state.text
+                            )
+                        }
+                    }
+                    .onAppear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onDisappear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onReceive(self.state.$text.debounce(for: .seconds(2), scheduler: RunLoop.main)) { newValue in
+                        stringBinding.value = newValue
+                    }
+
+                case .secure(let content):
+                    let stringBinding = content.lower(binding: self.binding).forSwiftUI
+
+                    Group {
+                        if #available(iOS 15.0, *) {
+                            SwiftUI.SecureField(text: self.$state.text) {
+                                metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                            }
+                        } else {
+                            SwiftUI.SecureField(
+                                metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
+                                text: self.$state.text
+                            )
+                        }
+                    }
+                    .onAppear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onDisappear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onReceive(self.state.$text.debounce(for: .seconds(2), scheduler: RunLoop.main)) { newValue in
+                        stringBinding.value = newValue
+                    }
+
+                case .format(let content):
+                    if #available(iOS 15.0, *) {
+                        SwiftUI.TextField(value: self.binding.forSwiftUI, format: content.format) {
+                            self.resourceResolver.text(metadata.name ?? "?")
+                        }
+                    } else {
+                        // this is unreachable since Format isn't constructible under iOS 15
+                        EmptyView()
+                    }
+                }
+                
+                if !self.state.text.isEmpty {
+                    Button {
+                        self.state.text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }.padding(.leading)
+                }
             }
-        }.erased
+            .textContentType(nil)
+            .keyboardType(.asciiCapable)
+        }
+    }
+    
+
+    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+        return Content(metadata: field, binding: binding.forSwiftUI, presentation: self).erased
+    }
+    
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+        let style: Style
+        switch self {
+        case .plain(let content):
+            style = content.style
+        case .secure(let content):
+            style = content.style
+        case .format(let content):
+            style = content.style
+        }
+        
+        switch style {
+        case .inline:
+            fatalError("unreachable")
+        case .screen:
+            return FieldPresentations.Group<Value>.screen().body(for: model, id: id, builder: builder)
+        case .section:
+            return FieldPresentations.Group<Value>.section().body(for: model, id: id, builder: builder)
+        case .custom(let presentation):
+            if let swiftUIPresenting = presentation as? (any SwiftUIGroupPresenting) {
+                return swiftUIPresenting.body(for: model, id: id, builder: builder)
+            } else {
+                // TODO: implement through field presentation?
+                fatalError("unimplement")
+            }
+        }
     }
 }
 
@@ -315,8 +458,10 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresent
                             }
                         }()
                     )
+#if os(iOS)
                 case .wheel where !canDeselect:
                     picker.pickerStyle(.wheel)
+#endif
                 case .menu where !canDeselect:
                     if #available(iOS 14, *) {
                         picker.pickerStyle(.menu)
@@ -371,7 +516,7 @@ extension FieldPresentations.Slider: SwiftUIFieldPresenting {
                     value: binding.forSwiftUI,
                     in: content.range,
                     step: content.step ?? content.range.lowerBound.distance(to: content.range.upperBound) / 100,
-                    label: { Text(field.displayName) },
+                    label: { MetadataLabel(field, value: binding.forSwiftUI) },
                     minimumValueLabel: { Text(String(format: "%.2f", Double(content.range.lowerBound))) },
                     maximumValueLabel: { Text(String(format: "%.2f", Double(content.range.upperBound))) }
                 )
