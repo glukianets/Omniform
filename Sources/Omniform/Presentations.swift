@@ -11,7 +11,7 @@ public protocol GroupPresenting<Value>: FieldPresenting {
     func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel?
 }
 
-public struct FieldPresentations {
+public struct Presentations {
     /* namespace */
 }
 
@@ -25,7 +25,7 @@ extension FieldPresenting where Self.Value: CustomFieldPresentable {
 
 // MARK: - GroupPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Group<Value>: GroupPresenting, Equatable {
         public typealias Value = Value
         
@@ -65,24 +65,24 @@ extension FieldPresentations {
 
 extension FieldPresenting {
     @inlinable
-    public static func section<T>(caption: Metadata.Text? = nil) -> Self where Self == FieldPresentations.Group<T> {
+    public static func section<T>(caption: Metadata.Text? = nil) -> Self where Self == Presentations.Group<T> {
         .section(.init(caption: caption))
     }
 
     @inlinable
-    public static func screen<T>() -> Self where Self == FieldPresentations.Group<T> {
+    public static func screen<T>() -> Self where Self == Presentations.Group<T> {
         .screen(.init())
     }
 
     @inlinable
-    public static func inline<T>() -> Self where Self == FieldPresentations.Group<T> {
+    public static func inline<T>() -> Self where Self == Presentations.Group<T> {
         .inline(.init())
     }
 }
 
 // MARK: - NoPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public struct None<Value>: FieldPresenting {
         public typealias Value = Value
         
@@ -94,12 +94,12 @@ extension FieldPresentations {
 
 extension FieldPresenting {
     @inlinable
-    public static func none<T>() -> Self where Self == FieldPresentations.None<T>, Value == T { .init() }
+    public static func none<T>() -> Self where Self == Presentations.None<T>, Value == T { .init() }
 }
 
 // MARK: - NestedPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Nested<Value, Wrapped>: FieldPresenting where Wrapped: FieldPresenting {
         public typealias Value = Value
         public typealias Wrapped = Wrapped
@@ -127,21 +127,21 @@ extension FieldPresenting {
     public static func lifting<Value, Wrapped: FieldPresenting>(
         _ presentation: Wrapped,
         through keyPath: KeyPath<Value, Wrapped.Value>
-    ) -> Self where Self == FieldPresentations.Nested<Value, Wrapped> {
+    ) -> Self where Self == Presentations.Nested<Value, Wrapped> {
         .init(wrapping: presentation, keyPath: keyPath)
     }
     
     @inlinable
     public func lifting<Outer>(
         through keyPath: KeyPath<Outer, Value>
-    ) -> FieldPresentations.Nested<Outer, Self> {
+    ) -> Presentations.Nested<Outer, Self> {
         .init(wrapping: self, keyPath: keyPath)
     }
 }
 
 // MARK: - InputPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum TextInput<Value>: GroupPresenting {
         public typealias Value = Value
         
@@ -253,7 +253,7 @@ extension FieldPresenting where Value: LosslessStringConvertible {
         presentation: Self.Style = .screen,
         prompt: Metadata.Text? = nil
     ) -> Self where
-        Self == FieldPresentations.TextInput<T>,
+        Self == Presentations.TextInput<T>,
         Value == T
     {
         if secure {
@@ -271,7 +271,7 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
         presentation: Self.Presentation.Style = .screen,
         prompt: Metadata.Text? = nil
     ) -> Self where
-        Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.TextInput<T>>,
+        Self == Presentations.Nullified<T.Wrapped, Presentations.TextInput<T>>,
         Value == T
     {
         if secure {
@@ -292,7 +292,7 @@ extension FieldPresenting {
     ) -> Self where
         F: ParseableFormatStyle,
         F.FormatOutput == String,
-        Self == FieldPresentations.TextInput<F.FormatInput>
+        Self == Presentations.TextInput<F.FormatInput>
     {
         .format(.init(format: format, style: presentation, prompt: prompt))
     }
@@ -306,7 +306,7 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
         presentation: Self.Presentation.Style = .screen,
         prompt: Metadata.Text? = nil
     ) -> Self where
-        Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.TextInput<T>>,
+        Self == Presentations.Nullified<T.Wrapped, Presentations.TextInput<T>>,
         Value == T,
         F: ParseableFormatStyle,
         F.FormatInput == T.Wrapped,
@@ -318,7 +318,7 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
 
 // MARK: - TogglePresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Toggle: FieldPresenting {
         public typealias Value = Bool
         
@@ -332,14 +332,14 @@ extension FieldPresentations {
     }
 }
 
-extension FieldPresenting where Self == FieldPresentations.Toggle {
+extension FieldPresenting where Self == Presentations.Toggle {
     @inlinable
     public static var toggle: Self { .regular() }
 }
 
 // MARK: - PickerPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Picker<Value>: GroupPresenting where Value: Hashable {
         public struct Style {
             fileprivate enum Represenation {
@@ -452,16 +452,16 @@ extension FieldPresentations {
 
 extension FieldPresenting where Value: CaseIterable & Hashable {
     @inlinable
-    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto) -> Self where
-        Self == FieldPresentations.Picker<T>,
+    public static func picker<T>(style: Presentations.Picker<T>.Style = .auto) -> Self where
+        Self == Presentations.Picker<T>,
         T == Value
     {
         .init(style: style, values: Value.allCases, deselectionValue: nil)
     }
 
     @inlinable
-    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto, deselectUsingValue value: Value) -> Self where
-        Self == FieldPresentations.Picker<T>,
+    public static func picker<T>(style: Presentations.Picker<T>.Style = .auto, deselectUsingValue value: Value) -> Self where
+        Self == Presentations.Picker<T>,
         T == Value
     {
         .init(style: style, values: Value.allCases, deselectionValue: value)
@@ -470,16 +470,16 @@ extension FieldPresenting where Value: CaseIterable & Hashable {
 
 extension FieldPresenting where Value: _OptionalProtocol & Hashable, Value.Wrapped: CaseIterable {
     @inlinable
-    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto) -> Self where
-        Self == FieldPresentations.Picker<T>,
+    public static func picker<T>(style: Presentations.Picker<T>.Style = .auto) -> Self where
+        Self == Presentations.Picker<T>,
         T == Value
     {
         .init(style: style, values: T.Wrapped.allCases.map { .some($0) }, deselectionValue: .some(nil))
     }
 
     @inlinable
-    public static func picker<T>(style: FieldPresentations.Picker<T>.Style = .auto, deselectUsingValue value: Value) -> Self where
-        Self == FieldPresentations.Picker<T>,
+    public static func picker<T>(style: Presentations.Picker<T>.Style = .auto, deselectUsingValue value: Value) -> Self where
+        Self == Presentations.Picker<T>,
         T == Value
     {
         .init(style: style, values: T.Wrapped.allCases.map { .some($0) }, deselectionValue: value)
@@ -489,10 +489,10 @@ extension FieldPresenting where Value: _OptionalProtocol & Hashable, Value.Wrapp
 extension FieldPresenting where Value: Hashable {
     @inlinable
     public static func picker<T>(
-        style: FieldPresentations.Picker<T>.Style = .auto,
+        style: Presentations.Picker<T>.Style = .auto,
         cases: Value...
     ) -> Self where
-        Self == FieldPresentations.Picker<T>,
+        Self == Presentations.Picker<T>,
         T == Value
     {
         .init(style: style, values: cases, deselectionValue: nil)
@@ -500,11 +500,11 @@ extension FieldPresenting where Value: Hashable {
 
     @inlinable
     public static func picker<T>(
-        style: FieldPresentations.Picker<T>.Style = .auto,
+        style: Presentations.Picker<T>.Style = .auto,
         cases: Value...,
         deselectUsing value: Value
     ) -> Self where
-        Self == FieldPresentations.Picker<T>,
+        Self == Presentations.Picker<T>,
         T == Value
     {
         .init(style: style, values: cases, deselectionValue: value)
@@ -513,7 +513,7 @@ extension FieldPresenting where Value: Hashable {
 
 // MARK: - SliderPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Slider<Value>: FieldPresenting where Value: BinaryFloatingPoint, Value.Stride: BinaryFloatingPoint {
         public typealias Value = Value
        
@@ -537,7 +537,7 @@ extension FieldPresenting where Value: BinaryFloatingPoint, Value.Stride: Binary
         in range: ClosedRange<Value> = 0...1,
         by step: T.Stride? = nil
     ) -> Self where
-        Self == FieldPresentations.Slider<T>,
+        Self == Presentations.Slider<T>,
         Value == T
     {
         .regular(.init(range: range, step: step))
@@ -546,7 +546,7 @@ extension FieldPresenting where Value: BinaryFloatingPoint, Value.Stride: Binary
 
 // MARK: - StepperPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Stepper<Value>: FieldPresenting where Value: Strideable {
         public typealias Value = Value
 
@@ -569,7 +569,7 @@ extension FieldPresenting where Value: FixedWidthInteger, Value.Stride: BinaryIn
     public static func stepper<T>(
         by step: T.Stride = 1
     ) -> Self where
-        Self == FieldPresentations.Stepper<T>,
+        Self == Presentations.Stepper<T>,
         Value == T
     {
         .stepper(in: max(Value(clamping: Int32.min), Value.min)...min(Value(clamping: Int32.max), Value.max), by: step)
@@ -580,7 +580,7 @@ extension FieldPresenting where Value: FixedWidthInteger, Value.Stride: BinaryIn
         in range: some RangeExpression<Value>,
         by step: T.Stride = 1
     ) -> Self where
-        Self == FieldPresentations.Stepper<T>,
+        Self == Presentations.Stepper<T>,
         Value == T
     {
         .regular(.init(range: ClosedRange(range.relative(to: Value.min..<Value.max)), step: step))
@@ -593,7 +593,7 @@ extension FieldPresenting where Value: BinaryInteger, Value.Stride: BinaryIntege
         in range: ClosedRange<Value>,
         by step: T.Stride = 1
     ) -> Self where
-        Self == FieldPresentations.Stepper<T>,
+        Self == Presentations.Stepper<T>,
         Value == T
     {
         .regular(.init(range: range, step: step))
@@ -602,7 +602,7 @@ extension FieldPresenting where Value: BinaryInteger, Value.Stride: BinaryIntege
 
 // MARK: - ButtonPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public struct ButtonRole: Equatable {
         private enum Representation: Equatable {
             case destructive, regular
@@ -633,9 +633,9 @@ extension FieldPresentations {
 extension FieldPresenting where Value == () -> Void {
     @inlinable
     public static func button(
-        role: FieldPresentations.ButtonRole = .regular
+        role: Presentations.ButtonRole = .regular
     ) -> Self where
-        Self == FieldPresentations.Button
+        Self == Presentations.Button
     {
         .regular(.init(role: role))
     }
@@ -643,7 +643,7 @@ extension FieldPresenting where Value == () -> Void {
 
 // MARK: - DatePickerPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public struct DatePickerComponents: OptionSet {
         public static let date = Self(rawValue: 1 << 1)
         public static let hourAndMinute = Self(rawValue: 1 << 2)
@@ -676,9 +676,9 @@ extension FieldPresenting where Value == Date {
     @inlinable
     public static func picker(
         in interval: DateInterval = .init(start: .distantPast, end: .distantFuture),
-        components: FieldPresentations.DatePickerComponents = .date
+        components: Presentations.DatePickerComponents = .date
     ) -> Self where
-        Self == FieldPresentations.DatePicker
+        Self == Presentations.DatePicker
     {
         .inline(.init(components: components, interval: interval))
     }
@@ -686,7 +686,7 @@ extension FieldPresenting where Value == Date {
 
 // MARK: - DocumentingPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Documented<Value, Presentation: FieldPresenting>: FieldPresenting where Presentation.Value == Value {
         public typealias Value = Value
         
@@ -709,7 +709,7 @@ extension FieldPresenting {
         _ wrapped: P,
         _ doc: S
     ) -> Self where
-        Self == FieldPresentations.Documented<T, P>,
+        Self == Presentations.Documented<T, P>,
         Value == T
     {
         .docString(.init(wrapped: wrapped, documentation: String(doc)))
@@ -717,14 +717,14 @@ extension FieldPresenting {
 }
 
 extension FieldPresenting {
-    public func document<S: StringProtocol>(_ doc: S) -> FieldPresentations.Documented<Self.Value, Self> {
+    public func document<S: StringProtocol>(_ doc: S) -> Presentations.Documented<Self.Value, Self> {
         .docString(.init(wrapped: self, documentation: String(doc)))
     }
 }
 
 // MARK: - NullifyingPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum Nullified<Value, Presentation>: FieldPresenting
     where
         Presentation: FieldPresenting,
@@ -754,7 +754,7 @@ extension FieldPresenting {
         _ wrapped: P,
         when value: V.Wrapped
     ) -> Self where
-        Self == FieldPresentations.Nullified<V, P>,
+        Self == Presentations.Nullified<V, P>,
         V: _OptionalProtocol,
         P: FieldPresenting<V>
     {
@@ -763,7 +763,7 @@ extension FieldPresenting {
     
     public func nullifying<V>(
         when value: V.Wrapped
-    ) -> FieldPresentations.Nullified<V, Self> where
+    ) -> Presentations.Nullified<V, Self> where
         V: _OptionalProtocol,
         Self.Value == V.Wrapped,
         V.Wrapped: Equatable
@@ -774,7 +774,7 @@ extension FieldPresenting {
 
 // MARK: - EitherPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public enum EitherPresentation<First, Second>: FieldPresenting
     where
         First: FieldPresenting,
@@ -790,7 +790,7 @@ extension FieldPresentations {
 
 // MARK: - GroupingPresentation
 
-extension FieldPresentations {
+extension Presentations {
     public struct Grouped<Group: GroupPresenting, Field: FieldPresenting>: GroupPresenting where Group.Value == Field.Value {
         public typealias Value = Field.Value
         public typealias Field = Field
@@ -805,7 +805,7 @@ extension FieldPresentations {
         }
         
         public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
-            if let group = self.groupPresentation as? FieldPresentations.Group<Value>, case .inline = group { return nil }
+            if let group = self.groupPresentation as? Presentations.Group<Value>, case .inline = group { return nil }
 
             return .init(name: metadata.name, icon: metadata.icon) {
                 .field(binding, metadata: metadata, ui: self.fieldPresentation)
@@ -819,7 +819,7 @@ extension FieldPresenting {
         _ fieldPresentation: P,
         inside groupPresenation: G
     ) -> Self where
-        Self == FieldPresentations.Grouped<G, P>,
+        Self == Presentations.Grouped<G, P>,
         P: FieldPresenting,
         G: GroupPresenting,
         P.Value == G.Value
@@ -829,7 +829,7 @@ extension FieldPresenting {
     
     public func grouping<G>(
         inside groupPresenation: G
-    ) -> FieldPresentations.Grouped<G, Self> where
+    ) -> Presentations.Grouped<G, Self> where
         G: GroupPresenting,
         Self.Value == G.Value
     {

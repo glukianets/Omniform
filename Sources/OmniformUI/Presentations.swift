@@ -14,7 +14,7 @@ public protocol SwiftUIGroupPresenting<Value>: GroupPresenting {
 
 // MARK: - Group
 
-private extension FieldPresentations {
+private extension Presentations {
     struct GroupPresentationTrampoline<Value>: SwiftUIFieldPresenting {
         typealias Value = Value
         
@@ -27,7 +27,7 @@ private extension FieldPresentations {
     }
 }
 
-extension FieldPresentations.Group: SwiftUIGroupPresenting {
+extension Presentations.Group: SwiftUIGroupPresenting {
     private struct NavigationLinkView: View {
         @Environment(\.omniformPresentation) var presentationKind
         let model: FormModel
@@ -63,7 +63,7 @@ extension FieldPresentations.Group: SwiftUIGroupPresenting {
     }
     
     public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
-        let presentation = FieldPresentations.GroupPresentationTrampoline<FormModel> { _ in
+        let presentation = Presentations.GroupPresentationTrampoline<FormModel> { _ in
             SwiftUI.Group {
                 switch self {
                 case .section(let section):
@@ -82,7 +82,7 @@ extension FieldPresentations.Group: SwiftUIGroupPresenting {
 
 // MARK: - Grouped
 
-extension FieldPresentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting {
+extension Presentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         if #available(iOS 16.0.0, *) {
             guard let presentation = self.fieldPresentation as? any SwiftUIFieldPresenting<Value> else {
@@ -107,7 +107,7 @@ extension FieldPresentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresen
 
 // MARK: - Nested
 
-extension FieldPresentations.Nested: SwiftUIFieldPresenting where Wrapped: SwiftUIFieldPresenting {
+extension Presentations.Nested: SwiftUIFieldPresenting where Wrapped: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> Wrapped.Body {
         switch self {
         case .subscript(let representation):
@@ -119,7 +119,7 @@ extension FieldPresentations.Nested: SwiftUIFieldPresenting where Wrapped: Swift
 
 // MARK: - None
 
-extension FieldPresentations.None: SwiftUIFieldPresenting {
+extension Presentations.None: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> EmptyView {
         EmptyView()
     }
@@ -127,7 +127,7 @@ extension FieldPresentations.None: SwiftUIFieldPresenting {
 
 // MARK: - Nullifying
 
-extension FieldPresentations.Nullified: SwiftUIFieldPresenting where Presentation: SwiftUIFieldPresenting {
+extension Presentations.Nullified: SwiftUIFieldPresenting where Presentation: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         switch self {
         case .matching(let content):
@@ -144,7 +144,7 @@ extension FieldPresentations.Nullified: SwiftUIFieldPresenting where Presentatio
 
 // MARK: - Documented
 
-extension FieldPresentations.Documented: SwiftUIFieldPresenting where Presentation: SwiftUIFieldPresenting {
+extension Presentations.Documented: SwiftUIFieldPresenting where Presentation: SwiftUIFieldPresenting {
     private struct DocumentationView<Content: View>: View {
         @State var isShowingDoc: Bool = false
         
@@ -185,7 +185,7 @@ extension FieldPresentations.Documented: SwiftUIFieldPresenting where Presentati
 
 // MARK: - View
 
-extension FieldPresentations {
+extension Presentations {
     public struct ViewPresentation<Value>: FieldPresenting where Value: SwiftUI.View {
         public typealias Value = Value
         
@@ -197,7 +197,7 @@ extension FieldPresentations {
 
 extension FieldPresenting where Value: SwiftUI.View {
     public static func view<T>() -> Self where
-        Self == FieldPresentations.ViewPresentation<T>,
+        Self == Presentations.ViewPresentation<T>,
         Value == T
     {
         .init()
@@ -206,7 +206,7 @@ extension FieldPresenting where Value: SwiftUI.View {
 
 // MARK: - Toggle
 
-extension FieldPresentations.Toggle: SwiftUIFieldPresenting {
+extension Presentations.Toggle: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         let binding = binding.forSwiftUI
         return SwiftUI.Toggle(isOn: binding) {
@@ -217,7 +217,7 @@ extension FieldPresentations.Toggle: SwiftUIFieldPresenting {
 
 // MARK: - TextInput
 
-extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
+extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
     private final class StateContainer: ObservableObject {
         @Published public var text: String
         
@@ -230,10 +230,10 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPres
         @Environment(\.omniformResourceResolver) var resourceResolver
         var metadata: Metadata
         var binding: any ValueBinding<Value>
-        var presentation: FieldPresentations.TextInput<Value>
+        var presentation: Presentations.TextInput<Value>
         @StateObject var state: StateContainer = StateContainer(text: "")
         
-        public init(metadata: Metadata, binding: any ValueBinding<Value>, presentation: FieldPresentations.TextInput<Value>) {
+        public init(metadata: Metadata, binding: any ValueBinding<Value>, presentation: Presentations.TextInput<Value>) {
             self.metadata = metadata
             self.binding = binding
             self.presentation = presentation
@@ -337,9 +337,9 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPres
         case .inline:
             fatalError("unreachable")
         case .screen:
-            return FieldPresentations.Group<Value>.screen().body(for: model, id: id, builder: builder)
+            return Presentations.Group<Value>.screen().body(for: model, id: id, builder: builder)
         case .section:
-            return FieldPresentations.Group<Value>.section().body(for: model, id: id, builder: builder)
+            return Presentations.Group<Value>.section().body(for: model, id: id, builder: builder)
         case .custom(let presentation):
             if let swiftUIPresenting = presentation as? (any SwiftUIGroupPresenting) {
                 return swiftUIPresenting.body(for: model, id: id, builder: builder)
@@ -353,7 +353,7 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPres
 
 // MARK: - Picker
 
-extension FieldPresentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
+extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
     private struct SelectionItem: View {
         @Binding var selection: Value?
         var value: Value
@@ -423,7 +423,7 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresent
     
     private struct PickerView: View {
         @Environment(\.omniformPresentation) var omniformPresentation
-        let presentation: FieldPresentations.Picker<Value>
+        let presentation: Presentations.Picker<Value>
         let field: Metadata
         let binding: Binding<Value>
         let canDeselect: Bool
@@ -500,14 +500,14 @@ extension FieldPresentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresent
         {
             return dispatch.build(model: model, id: id, builder: builder)
         } else {
-            return FieldPresentations.Group<Value>.inline().body(for: model, id: id, builder: builder)
+            return Presentations.Group<Value>.inline().body(for: model, id: id, builder: builder)
         }
     }
 }
 
 // MARK: - Slider
 
-extension FieldPresentations.Slider: SwiftUIFieldPresenting {
+extension Presentations.Slider: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         SwiftUI.Group {
             switch self {
@@ -527,7 +527,7 @@ extension FieldPresentations.Slider: SwiftUIFieldPresenting {
 
 // MARK: - Stepper
 
-extension FieldPresentations.Stepper: SwiftUIFieldPresenting {
+extension Presentations.Stepper: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         SwiftUI.Group {
             switch self {
@@ -546,7 +546,7 @@ extension FieldPresentations.Stepper: SwiftUIFieldPresenting {
 
 // MARK: - Button
 
-extension FieldPresentations.Button: SwiftUIFieldPresenting {
+extension Presentations.Button: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         SwiftUI.Group {
             let label = MetadataLabel(field, value: binding.forSwiftUI)
@@ -572,7 +572,7 @@ extension FieldPresentations.Button: SwiftUIFieldPresenting {
 
 // MARK: - DatePicker
 
-extension FieldPresentations.DatePickerComponents {
+extension Presentations.DatePickerComponents {
     fileprivate var swiftUI: DatePickerComponents {
         var componets: DatePickerComponents = []
         if self.contains(.date) {
@@ -585,7 +585,7 @@ extension FieldPresentations.DatePickerComponents {
     }
 }
 
-extension FieldPresentations.DatePicker: SwiftUIFieldPresenting {
+extension Presentations.DatePicker: SwiftUIFieldPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         SwiftUI.Group {
             switch self {
@@ -633,7 +633,7 @@ extension FieldPresentations.DatePicker: SwiftUIFieldPresenting {
 
 // MARK: - EitherPresentation
 
-extension FieldPresentations.EitherPresentation: SwiftUIFieldPresenting
+extension Presentations.EitherPresentation: SwiftUIFieldPresenting
 where
     First: SwiftUIFieldPresenting,
     Second: SwiftUIFieldPresenting

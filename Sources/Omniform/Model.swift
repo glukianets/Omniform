@@ -128,7 +128,7 @@ public struct FormModel {
                 return model.filtered(using: query).flatMap {
                     !$0.members.isEmpty ? FormModel.Member.group(
                         model: $0,
-                        ui: FieldPresentations.Group<FormModel>.section(),
+                        ui: Presentations.Group<FormModel>.section(),
                         binding: bind(value: $0)
                     ).with(id: id).representation : nil
                 }
@@ -362,7 +362,7 @@ extension FormModel {
                 
         public static func group(
             model: FormModel,
-            ui presentation: FieldPresentations.Group<FormModel> = .section()
+            ui presentation: Presentations.Group<FormModel> = .section()
         ) -> Self {
             .group(
                 model: model,
@@ -385,7 +385,7 @@ extension FormModel {
         public static func group(
             name: Metadata.Text? = nil,
             icon: Metadata.Image? = nil,
-            ui presentation: FieldPresentations.Group<FormModel> = .section(),
+            ui presentation: Presentations.Group<FormModel> = .section(),
             @Builder _ builder: () -> Prototype
         ) -> Self {
             let model = FormModel(name: name, icon: icon, prototype: builder())

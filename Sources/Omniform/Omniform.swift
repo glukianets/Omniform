@@ -47,7 +47,7 @@ public protocol CustomFormPresentable: CustomFieldPresentable {
 }
 
 extension CustomFormPresentable {
-    public static var preferredPresentation: FieldPresentations.Group<Self> {
+    public static var preferredPresentation: Presentations.Group<Self> {
         .section()
     }
 }
@@ -198,13 +198,13 @@ extension URL: CustomFieldPresentable {
 }
 
 extension Optional: CustomFieldPresentable where Wrapped: CustomFieldPresentable & Equatable & _DefaultInitializable {
-    public static var preferredPresentation: FieldPresentations.Nullified<Self, Wrapped.PreferredPresentation> {
+    public static var preferredPresentation: Presentations.Nullified<Self, Wrapped.PreferredPresentation> {
         Wrapped.preferredPresentation.nullifying(when: Wrapped.init())
     }
 }
 
 extension CustomFieldPresentable where Self: Hashable & CaseIterable {
-    public static var preferredPresentation: FieldPresentations.Picker<Self> {
+    public static var preferredPresentation: Presentations.Picker<Self> {
         .picker()
     }
 }
