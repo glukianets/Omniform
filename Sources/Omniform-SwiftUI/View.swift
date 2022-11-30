@@ -5,9 +5,10 @@ import SwiftUI
 
 public struct Omniform: View {
     @Environment(\.presentationMode) @Binding private var presentationMode
-    
+
     private let model: FormModel
-    
+    @State private var query: String = ""
+
     public init(_ binding: some ValueBinding) {
         self.init(model: FormModel(binding))
     }
@@ -17,17 +18,24 @@ public struct Omniform: View {
     }
 
     public var body: some View {
-        NavigationView {
-            OmniformView(model: self.model)
-                .navigationBarTitle(self.model.metadata.displayName)
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationBarItems(leading: Button { self.presentationMode.dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.secondary)
-                        .contentShape(Circle())
-                })
+        let omniform = OmniformView(model: self.model)
+            .navigationBarItems(leading: Button { self.presentationMode.dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .contentShape(Circle())
+            })
+            .omniformPresentation(.navigation(fromRoot: true))
+        
+        return NavigationView {
+                if #available(iOS 15.0, *) {
+                    omniform
+                        .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
+                } else {
+                    omniform
+                }
         }
+        .navigationViewStyle(.stack)
         .omniformPresentation(.navigation)
     }
 }
@@ -35,40 +43,18 @@ public struct Omniform: View {
 // MARK: - OmniformView
 
 public struct OmniformView: View {
-    private struct RegularContentView: View {
-        private let model: FormModel
-
-        public init(model: FormModel) {
-            self.model = model
-        }
-
-        public var body: some View {
-            Form {
-                OmniformContentView(model: model)
-            }
-        }
-    }
-
-    @available(iOS 15, *)
-    private struct SearchableContentView: View {
-        private let model: FormModel
-        @State private var query: String = ""
-        
-        public init(model: FormModel) {
-            self.model = model
-        }
-
-        public var body: some View {
-            Form {
-                if let model = self.model.filtered(using: self.query) {
-                    OmniformContentView(model: model)
-                }
-            }
-            .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
-        }
-    }
-    
+    @Environment(\.omniformResourceResolver) var resourceResolver
+    @Environment(\.omniformPresentation) var presentation
     private var model: FormModel
+    
+    private var barTitleDisplayMode: NavigationBarItem.TitleDisplayMode {
+        switch self.presentation {
+        case .navigation(fromRoot: true):
+            return .large
+        default:
+            return .inline
+        }
+    }
     
     public init(_ binding: some ValueBinding) {
         self.init(model: FormModel(binding))
@@ -77,17 +63,14 @@ public struct OmniformView: View {
     public init(model: FormModel) {
         self.model = model
     }
-
+    
     public var body: some View {
-        Group {
-            if #available(iOS 15, *) {
-                SearchableContentView(model: self.model)
-            } else {
-                RegularContentView(model: self.model)
-            }
+        Form {
+            OmniformContentView(model: model)
         }
         .scrollDismissesKeyboard(.immediately)
-        .navigationTitle(self.model.metadata.displayName)
+        .navigationTitle(self.model.metadata.name.map(self.resourceResolver.string(_:)) ?? "")
+        .navigationBarTitleDisplayMode(self.barTitleDisplayMode)
     }
 }
 

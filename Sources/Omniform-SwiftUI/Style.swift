@@ -4,13 +4,14 @@ import SwiftUI
 // MARK: - OmniformPresentation
 
 public struct OmniformPresentation: Equatable {
-    internal enum PresentationKind {
+    internal enum PresentationKind: Equatable {
         case standalone
-        case navigation
+        case navigation(isRoot: Bool = false)
     }
     
     public static var standalone: Self = Self(kind: .standalone)
-    public static var navigation: Self = Self(kind: .navigation)
+    public static var navigation: Self = Self(kind: .navigation())
+    public static func navigation(fromRoot: Bool) -> Self { .init(kind: .navigation(isRoot: fromRoot)) }
 
     internal let kind: PresentationKind
 }

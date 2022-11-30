@@ -33,7 +33,7 @@ extension FieldPresentations.Group: SwiftUIGroupPresenting {
         let model: FormModel
         
         var body: some View {
-            if self.presentationKind == .navigation {
+            if self.presentationKind != .standalone {
                 NavigationLink(destination: DynamicView(OmniformView(model: model))) {
                     MetadataLabel(model.metadata, value: .constant(model))
                 }
