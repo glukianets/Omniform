@@ -114,11 +114,11 @@ extension Metadata {
         
         /// Custom image type
         public struct Custom: Equatable {
-            // Name of a local image resource
+            /// Name of a local image resource
             public let name: String
-            // Bundle containing local image resource
+            /// Bundle containing local image resource
             public let bundle: Bundle?
-            // Numeric value
+            /// Numeric value
             public let value: Double?
         }
         

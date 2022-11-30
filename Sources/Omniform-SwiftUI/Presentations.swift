@@ -218,50 +218,6 @@ extension FieldPresentations.Toggle: SwiftUIFieldPresenting {
 // MARK: - TextInput
 
 extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
-    private struct PlainTextInput: View {
-        @Environment(\.omniformResourceResolver) var resourceResolver
-        var metadata: Metadata
-        @Binding var value: String
-        
-        var body: some View {
-            SwiftUI.Group {
-                if #available(iOS 15.0, *) {
-                    SwiftUI.TextField(text: self.$value) {
-                        metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
-                    }
-                } else {
-                    SwiftUI.TextField<Text>(
-                        metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
-                        text: self.$value
-                    )
-                }
-            }
-            .textContentType(nil)
-#if os(iOS)
-            .keyboardType(.asciiCapable)
-#endif
-        }
-    }
-    
-    private struct SecureTextInput: View {
-        @Environment(\.omniformResourceResolver) var resourceResolver
-        var metadata: Metadata
-        @Binding var value: String
-        
-        var body: some View {
-            if #available(iOS 15.0, *) {
-                SwiftUI.SecureField(text: self.$value) {
-                    metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
-                }
-            } else {
-                SwiftUI.SecureField(
-                    metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
-                    text: self.$value
-                )
-            }
-        }
-    }
-    
     private final class StateContainer: ObservableObject {
         @Published public var text: String
         
@@ -273,42 +229,80 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPres
     private struct Content: View {
         @Environment(\.omniformResourceResolver) var resourceResolver
         var metadata: Metadata
-        @Binding var text: String
+        var binding: any ValueBinding<Value>
         var presentation: FieldPresentations.TextInput<Value>
         @StateObject var state: StateContainer = StateContainer(text: "")
         
-        public init(metadata: Metadata, binding: Binding<String>, presentation: FieldPresentations.TextInput<Value>) {
+        public init(metadata: Metadata, binding: any ValueBinding<Value>, presentation: FieldPresentations.TextInput<Value>) {
             self.metadata = metadata
-            self._text = binding
+            self.binding = binding
             self.presentation = presentation
         }
         
         public var body: some View {
             return HStack {
                 switch self.presentation {
-                case .plain:
-                    if #available(iOS 15.0, *) {
-                        SwiftUI.TextField(text: self.$state.text) {
-                            metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                case .plain(let content):
+                    let stringBinding = content.lower(binding: self.binding).forSwiftUI
+                    
+                    Group {
+                        if #available(iOS 15.0, *) {
+                            SwiftUI.TextField(text: self.$state.text) {
+                                metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                            }
+                        } else {
+                            SwiftUI.TextField<Text>(
+                                metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
+                                text: self.$state.text
+                            )
                         }
-                    } else {
-                        SwiftUI.TextField<Text>(
-                            metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
-                            text: self.$state.text
-                        )
                     }
-                case .secure:
+                    .onAppear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onDisappear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onReceive(self.state.$text.debounce(for: .seconds(2), scheduler: RunLoop.main)) { newValue in
+                        stringBinding.value = newValue
+                    }
+
+                case .secure(let content):
+                    let stringBinding = content.lower(binding: self.binding).forSwiftUI
+
+                    Group {
+                        if #available(iOS 15.0, *) {
+                            SwiftUI.SecureField(text: self.$state.text) {
+                                metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                            }
+                        } else {
+                            SwiftUI.SecureField(
+                                metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
+                                text: self.$state.text
+                            )
+                        }
+                    }
+                    .onAppear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onDisappear {
+                        self.state.text = stringBinding.value
+                    }
+                    .onReceive(self.state.$text.debounce(for: .seconds(2), scheduler: RunLoop.main)) { newValue in
+                        stringBinding.value = newValue
+                    }
+
+                case .format(let content):
                     if #available(iOS 15.0, *) {
-                        SwiftUI.SecureField(text: self.$state.text) {
-                            metadata.name.map(self.resourceResolver.text(_:)) ?? Text("?")
+                        SwiftUI.TextField(value: self.binding.forSwiftUI, format: content.format) {
+                            self.resourceResolver.text(metadata.name ?? "?")
                         }
                     } else {
-                        SwiftUI.SecureField(
-                            metadata.name.map(self.resourceResolver.string(_:)) ?? "?",
-                            text: self.$state.text
-                        )
+                        // this is unreachable since Format isn't constructible under iOS 15
+                        EmptyView()
                     }
                 }
+                
                 if !self.state.text.isEmpty {
                     Button {
                         self.state.text = ""
@@ -320,21 +314,11 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPres
             }
             .textContentType(nil)
             .keyboardType(.asciiCapable)
-            .onAppear {
-                self.state.text = self.text
-            }
-            .onDisappear {
-                self.state.text = self.text
-            }
-            .onReceive(self.state.$text.debounce(for: .seconds(2), scheduler: RunLoop.main)) { newValue in
-                self.text = newValue
-            }
         }
     }
     
 
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        let binding = binding.map { $0.description } set: { Value($0) }
         return Content(metadata: field, binding: binding.forSwiftUI, presentation: self).erased
     }
     
@@ -344,6 +328,8 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPres
         case .plain(let content):
             style = content.style
         case .secure(let content):
+            style = content.style
+        case .format(let content):
             style = content.style
         }
         
@@ -364,36 +350,6 @@ extension FieldPresentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPres
         }
     }
 }
-
-extension FieldPresentations.FormatInput: SwiftUIFieldPresenting {
-    private struct FormattedTextInput: View {
-        @Environment(\.omniformResourceResolver) var resourceResolver
-        var metadata: Metadata
-        var format: AnyParseableFormatStyle<Value, String>
-        @Binding var value: Value
-        
-        var body: some View {
-            if #available(iOS 15.0, *) {
-                SwiftUI.TextField(value: self.$value, format: self.format) {
-                    self.resourceResolver.text(metadata.name ?? "?")
-                }
-            } else {
-                // this is unreachable sincef Format isn't constructible under iOS 15
-                EmptyView()
-            }
-        }
-    }
-
-    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
-        Group {
-            switch self {
-            case .format(let content):
-                FormattedTextInput(metadata: field, format: content.format, value: binding.forSwiftUI)
-            }
-        }.erased
-    }
-}
-
 
 // MARK: - Picker
 
@@ -560,7 +516,7 @@ extension FieldPresentations.Slider: SwiftUIFieldPresenting {
                     value: binding.forSwiftUI,
                     in: content.range,
                     step: content.step ?? content.range.lowerBound.distance(to: content.range.upperBound) / 100,
-                    label: { Text(field.displayName) },
+                    label: { MetadataLabel(field, value: binding.forSwiftUI) },
                     minimumValueLabel: { Text(String(format: "%.2f", Double(content.range.lowerBound))) },
                     maximumValueLabel: { Text(String(format: "%.2f", Double(content.range.upperBound))) }
                 )

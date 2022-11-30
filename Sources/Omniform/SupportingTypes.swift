@@ -207,24 +207,3 @@ private final class SomeParseStrategy<F: ParseStrategy>: AnyParseStrategy<F.Pars
         return self.wrapped == other.wrapped
     }
 }
-
-// MARK: - StringFormatStyle
-
-internal struct StringFormatStyle<T: LosslessStringConvertible>: ParseableFormatStyle {
-    public enum Error: Swift.Error {
-        case parseFailed(String)
-    }
-    
-    public struct Strategy: ParseStrategy {
-        public func parse(_ value: String) throws -> T {
-            guard let result = T(value) else { throw Error.parseFailed(value) }
-            return result
-        }
-    }
-    
-    var parseStrategy: Strategy
-
-    func format(_ value: T) -> String {
-        value.description
-    }
-}

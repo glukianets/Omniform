@@ -142,7 +142,7 @@ extension FieldPresenting {
 // MARK: - InputPresentation
 
 extension FieldPresentations {
-    public enum TextInput<Value>: GroupPresenting where Value: LosslessStringConvertible {
+    public enum TextInput<Value>: GroupPresenting {
         public typealias Value = Value
         
         public enum Style {
@@ -155,27 +155,61 @@ extension FieldPresentations {
         public struct Plain {
             public let style: Style
             public let prompt: Metadata.Text?
+            private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
             
             @usableFromInline
-            internal init(style: Style = .screen, prompt: Metadata.Text? = nil) {
+            internal init(style: Style = .screen, prompt: Metadata.Text? = nil)
+            where Value: LosslessStringConvertible
+            {
                 self.style = style
                 self.prompt = prompt
+                self.rebinder = { $0.map { $0.description } set: { Value($0) } }
+            }
+            
+            public func lower(binding: some ValueBinding<Value>) -> any ValueBinding<String> {
+                self.rebinder(binding)
             }
         }
         
         public struct Secure {
             public let style: Style
             public let prompt: Metadata.Text?
+            private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
             
             @usableFromInline
-            internal init(style: Style = .screen, prompt: Metadata.Text? = nil) {
+            internal init(style: Style = .screen, prompt: Metadata.Text? = nil)
+            where Value: LosslessStringConvertible
+            {
                 self.style = style
                 self.prompt = prompt
+                self.rebinder = { $0.map { $0.description } set: { Value($0) } }
+            }
+
+            public func lower(binding: some ValueBinding<Value>) -> any ValueBinding<String> {
+                self.rebinder(binding)
+            }
+        }
+        
+        public struct Format {
+            public let format: AnyParseableFormatStyle<Value, String>
+            public let style: Style
+            public let prompt: Metadata.Text?
+
+            @available(iOS 15.0, *)
+            public init<F>(
+                format: F,
+                style: Style = .screen,
+                prompt: Metadata.Text? = nil
+            ) where F: ParseableFormatStyle, F.FormatInput == Value, F.FormatOutput == String {
+                self.style = style
+                self.prompt = prompt
+                self.format = .wrapping(format)
             }
         }
         
         case plain(Plain)
         case secure(Secure)
+        case format(Format)
         
         public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
             let style: Style
@@ -185,6 +219,9 @@ extension FieldPresentations {
                 style = content.style
                 prompt = content.prompt
             case .secure(let content):
+                style = content.style
+                prompt = content.prompt
+            case .format(let content):
                 style = content.style
                 prompt = content.prompt
             }
@@ -206,21 +243,6 @@ extension FieldPresentations {
                 return presentation.makeForm(metadata: metadata, binding: binding)
             }
         }
-    }
-    
-    public enum FormatInput<Value>: FieldPresenting {
-        public typealias Value = Value
-
-        public struct Format {
-            public let format: AnyParseableFormatStyle<Value, String>
-
-            @available(iOS 15.0, *)
-            public init<F>(format: F) where F: ParseableFormatStyle, F.FormatInput == Value, F.FormatOutput == String {
-                self.format = .wrapping(format)
-            }
-        }
-        
-        case format(Format)
     }
 }
 
@@ -263,28 +285,34 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
 extension FieldPresenting {
     @inlinable
     @available(iOS 15.0, *)
-    public static func input<F>(format: F) -> Self
-    where
+    public static func input<F>(
+        format: F,
+        presentation: Self.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
         F: ParseableFormatStyle,
         F.FormatOutput == String,
-        Self == FieldPresentations.FormatInput<F.FormatInput>
+        Self == FieldPresentations.TextInput<F.FormatInput>
     {
-        .format(.init(format: format))
+        .format(.init(format: format, style: presentation, prompt: prompt))
     }
 }
 
 extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringProtocol {
     @inlinable
     @available(iOS 15.0, *)
-    public static func input<T, F>(format: F) -> Self
-    where
-        Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.FormatInput<T>>,
+    public static func input<T, F>(
+        format: F,
+        presentation: Self.Presentation.Style = .screen,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
+        Self == FieldPresentations.Nullified<T.Wrapped, FieldPresentations.TextInput<T>>,
         Value == T,
         F: ParseableFormatStyle,
         F.FormatInput == T.Wrapped,
         F.FormatOutput == String
     {
-        .nullifying(.format(.init(format: format)), when: "")
+        .nullifying(.format(.init(format: format, style: presentation, prompt: prompt)), when: "")
     }
 }
 
