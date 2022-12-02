@@ -9,7 +9,7 @@ public protocol SwiftUIFieldPresenting<Value>: FieldPresenting {
 }
 
 public protocol SwiftUIGroupPresenting<Value>: GroupPresenting {
-    func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R
+    func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R]
 }
 
 // MARK: - Group
@@ -62,7 +62,7 @@ extension Presentations.Group: SwiftUIGroupPresenting {
         }
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         let presentation = Presentations.GroupPresentationTrampoline<FormModel> { _ in
             SwiftUI.Group {
                 switch self {
@@ -75,8 +75,13 @@ extension Presentations.Group: SwiftUIGroupPresenting {
                 }
             }.erased
         }
-
-        return builder.visit(field: model.metadata, id: id, using: presentation, through: bind(value: model))
+        
+        switch self {
+        case .section:
+            return Array(model.fields(using: builder))
+        case .screen, .inline:
+            return [builder.visit(field: model.metadata, id: id, using: presentation, through: bind(value: model))]
+        }
     }
 }
 
@@ -96,11 +101,11 @@ extension Presentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting 
     
     public typealias Body = AnyView
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         if let presentation = self.groupPresentation as? any SwiftUIGroupPresenting {
             return presentation.body(for: model, id: id, builder: builder)
         } else {
-            fatalError("Unreachable?")
+            return []
         }
     }
 }
@@ -322,7 +327,7 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
         return Content(metadata: field, binding: binding.forSwiftUI, presentation: self).erased
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         let style: Style
         switch self {
         case .plain(let content):
@@ -344,8 +349,7 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
             if let swiftUIPresenting = presentation as? (any SwiftUIGroupPresenting) {
                 return swiftUIPresenting.body(for: model, id: id, builder: builder)
             } else {
-                // TODO: implement through field presentation?
-                fatalError("unimplement")
+                return [] // TODO: Warn?
             }
         }
     }
@@ -488,7 +492,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
         return PickerView(presentation: self, field: field, binding: swiftUIBinding, canDeselect: canDeselect).erased
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         let binding = bind { () -> Value in
             preconditionFailure("Faux binding for type \(Value.self) shouldn't be called")
         }

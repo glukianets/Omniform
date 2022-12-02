@@ -66,8 +66,30 @@ public struct FormModel {
         @Builder builder: () -> Prototype
     ) {
         let metadata = Metadata(type: FormModel.self, id: Member.NoID(), name: name, icon: icon)
-        let prototype = builder()
-        self = .init(metadata: metadata, members: prototype.members)
+        self = .init(metadata: metadata, builder: builder)
+    }
+    
+    /// Builds a new model instance using convenient resultBuilder-based syntax
+    ///
+    /// You can call various static methods on ``Member`` to produce desired elements:
+    /// ```swift
+    /// FormModel(name: "To-do list") {
+    ///     .field(self.dataModel.$walkTheDog, name: "Walk the dog", presentaton: .toggle);
+    ///     .group(name: "Groceries") {
+    ///        .field(self.dataModel.$groceries.eggs, name: "Eggs");
+    ///        .field(self.dataModel.$groceries.milk, name: "Milk");
+    ///    }
+    /// }
+    /// ```
+    /// - Parameters:
+    ///   - name: name
+    ///   - icon: icon
+    ///   - builder: form builder
+    public init(
+        metadata: Metadata,
+        @Builder builder: () -> Prototype
+    ) {
+        self = .init(metadata: metadata, prototype: builder())
     }
     
     /// Builds a new form model instance by reflecting provided value binding
@@ -84,12 +106,14 @@ public struct FormModel {
         }
     }
     
-    internal init(
-        name: Metadata.Text? = nil,
-        icon: Metadata.Image? = nil,
+    /// Builds a new form model instance directly from metadata and prototype
+    /// - Parameters:
+    ///   - metadata: metadata
+    ///   - prototype: prototype
+    public init(
+        metadata: Metadata,
         prototype: Prototype
     ) {
-        let metadata = Metadata(type: Self.self, id: Member.NoID(), name: name, icon: icon)
         self = .init(metadata: metadata, members: prototype.members)
     }
 
@@ -111,7 +135,15 @@ public struct FormModel {
     /// - Parameter visitor: visitor that builds elements from provided form fields
     /// - Returns: a collection of elements built from this form's fields
     public func fields<Visitor: FieldVisiting>(using visitor: Visitor) -> some RandomAccessCollection<Visitor.Result> {
-        FieldsCollection<Visitor>(model: self, visitor: visitor)
+        
+        self.members.lazy.map { record in
+            switch record {
+            case .group(let model, id: let id, ui: let trampoline):
+                return trampoline.group(group: model, id: id, builder: visitor)
+            case .field(let field, id: let id, ui: let trampoline):
+                return trampoline.field(field: field, id: id, builder: visitor)
+            }
+        }
     }
     
     /// Filters a form to match seqrch query
@@ -127,9 +159,9 @@ public struct FormModel {
             case .group(let model, id: let id, ui: _):
                 return model.filtered(using: query).flatMap {
                     !$0.members.isEmpty ? FormModel.Member.group(
+                        bind(value: $0),
                         model: $0,
-                        ui: Presentations.Group<FormModel>.section(),
-                        binding: bind(value: $0)
+                        ui: Presentations.Group<FormModel>.section()
                     ).with(id: id).representation : nil
                 }
             default:
@@ -163,7 +195,6 @@ extension MemberProtocol {
         }
     }
 }
-
 private func fieldRecord<P, B>(presentation: P, binding: B) -> MemberProtocol
 where
     P: FieldPresenting,
@@ -279,44 +310,6 @@ extension CustomFormPresentableDispatch: CustomFormTrampoline where T: CustomFor
     }
 }
 
-// MARK: FieldsCollection
-
-extension FormModel {
-    private struct FieldsCollection<Visitor: FieldVisiting>: RandomAccessCollection {
-        public typealias Element = Visitor.Result
-        public typealias Index = Int
-        
-        private let visitor: Visitor
-        private let model: FormModel
-        
-        public var startIndex: Index {
-            return self.model.members.startIndex
-        }
-        
-        public var endIndex: Index {
-            return self.model.members.endIndex
-        }
-        
-        fileprivate init(model: FormModel, visitor: Visitor) {
-            self.visitor = visitor
-            self.model = model
-        }
-        
-        public func index(after i: Index) -> Index {
-            i + 1
-        }
-        
-        public subscript(index: Index) -> Visitor.Result {
-            switch self.model.members[index] {
-            case .group(let model, id: let id, ui: let trampoline):
-                return trampoline.group(group: model, id: id, builder: self.visitor)
-            case .field(let field, id: let id, ui: let trampoline):
-                return trampoline.field(field: field, id: id, builder: self.visitor)
-            }
-        }
-    }
-}
-
 // MARK: Prototype
 
 extension FormModel {
@@ -324,7 +317,9 @@ extension FormModel {
     public struct Prototype {
         fileprivate let members: [Member]
         
-        fileprivate init(members: [Member]) {
+        /// Create instance directly from members
+        /// - Parameter members: members
+        public init(members: [Member]) {
             self.members = members
         }
         
@@ -362,12 +357,12 @@ extension FormModel {
                 
         public static func group(
             model: FormModel,
-            ui presentation: Presentations.Group<FormModel> = .section()
+            ui presentation: some FieldPresenting<FormModel> = .section()
         ) -> Self {
             .group(
+                bind(value: model),
                 model: model,
-                ui: presentation,
-                binding: bind(value: model)
+                ui: presentation
             )
         }
         
@@ -376,9 +371,9 @@ extension FormModel {
             ui presentation: some FieldPresenting<T>
         ) -> Self {
             .group(
+                binding,
                 model: FormModel(binding),
-                ui: presentation,
-                binding: binding
+                ui: presentation
             )
         }
         
@@ -388,18 +383,18 @@ extension FormModel {
             ui presentation: Presentations.Group<FormModel> = .section(),
             @Builder _ builder: () -> Prototype
         ) -> Self {
-            let model = FormModel(name: name, icon: icon, prototype: builder())
+            let model = FormModel(name: name, icon: icon, builder: builder)
             return .group(
+                bind(value: model),
                 model: model,
-                ui: presentation,
-                binding: bind(value: model)
+                ui: presentation
             )
         }
         
-        internal static func group<T>( // Designated
+        public static func group<T>( // Designated
+            _ binding: any ValueBinding<T>,
             model: FormModel,
-            ui presentation: some FieldPresenting<T>,
-            binding: any ValueBinding<T>
+            ui presentation: some FieldPresenting<T>
         ) -> Self {
             .init(representation: .group(
                 model,
