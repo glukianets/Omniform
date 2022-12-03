@@ -17,8 +17,8 @@ public struct FormModel {
     }
     
     fileprivate enum Record: Identifiable {
-        case field(Metadata, id: AnyHashable, ui: any MemberProtocol)
-        case group(FormModel, id: AnyHashable, ui: any MemberProtocol)
+        case field(Metadata, id: AnyHashable, ui: any FieldRecordProtocol)
+        case group(FormModel, id: AnyHashable, ui: any GroupRecordProtocol)
         
         public var id: AnyHashable {
             get {
@@ -139,9 +139,9 @@ public struct FormModel {
         self.members.lazy.map { record in
             switch record {
             case .group(let model, id: let id, ui: let trampoline):
-                return trampoline.group(group: model, id: id, builder: visitor)
+                return trampoline.visit(group: model, id: id, builder: visitor)
             case .field(let field, id: let id, ui: let trampoline):
-                return trampoline.field(field: field, id: id, builder: visitor)
+                return trampoline.visit(field: field, id: id, builder: visitor)
             }
         }
     }
@@ -177,67 +177,121 @@ extension FormModel: CustomFormPresentable {
     }
 }
 
-// MARK: - Building
-
-private protocol MemberProtocol {
-    func field<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result
-    func group<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result
-}
-
-extension MemberProtocol {
-    func member(metadata: Metadata) -> FormModel.Member {
-        if let builder = self as? GroupMemberBuilding {
-            return builder.member(metadata: metadata)
-        } else if let builder = self as? FieldMemberBuilding {
-            return builder.member(metadata: metadata)
-        } else {
-            fatalError("Self is not [Field|Group]MemberBuilding")
+extension FormModel: CustomStringConvertible {
+    public var description: String {
+        func describe(metadata: Metadata) -> String? {
+            let icon: String? = metadata.icon.map {
+                switch $0 {
+                case .system(let content):
+                    return "icon: \'\(content.name)\'"
+                case .custom(let content):
+                    return "icon: \"\(content.name)\""
+                case .native(let content):
+                    return "icon: \(ObjectIdentifier(content.image))"
+                }
+            }
+            
+            let name: String? = metadata.name.map {
+                switch $0 {
+                case .text(let content):
+                    return "name: \"\(content.key)\""
+                }
+            }
+            
+            let fields = [name, icon].compactMap { $0 }
+            return fields.isEmpty ? nil : fields.joined(separator: ", ")
         }
+        
+        let members = self.members.map { record in
+            switch record {
+            case let .field(metadata, id: _, ui: ui):
+                return """
+                @Field(ui: \(ui)\(describe(metadata: metadata).map { ", \($0)" } ?? ""))
+                """
+            case let .group(form, id: _, ui: ui):
+                return """
+                @Group(ui: \(ui)) \(form)
+                """
+            }
+        }.joined(separator: "\n").indent("    ")
+        
+        return """
+        Form(\(describe(metadata: metadata) ?? "")) {
+        \(members)
+        }
+        """
     }
 }
-private func fieldRecord<P, B>(presentation: P, binding: B) -> MemberProtocol
+
+// MARK: - Building
+
+private func fieldRecord<P, B>(presentation: P, binding: B) -> any FieldRecordProtocol
 where
     P: FieldPresenting,
     B: ValueBinding,
     P.Value == B.Value
 {
-    FieldRecord<P, B>(presentation: presentation, binding: binding)
+    MemberRecord<P, B>(presentation: presentation, binding: binding)
 }
 
-private struct FieldRecord<P: FieldPresenting, B: ValueBinding>: MemberProtocol where P.Value == B.Value {
-    let presentation: P
-    let binding: B
+private func groupRecord<P, B>(presentation: P, binding: B) -> any GroupRecordProtocol
+where
+    P: GroupPresenting,
+    B: ValueBinding,
+    P.Value == B.Value
+{
+    MemberRecord<P, B>(presentation: presentation, binding: binding)
+}
+
+private struct MemberRecord<P: FieldPresenting, B: ValueBinding> where P.Value == B.Value {
+    var presentation: P
+    var binding: B
+}
+
+private protocol FieldRecordProtocol {
+    func member(metadata: Metadata) -> FormModel.Member
     
-    func field<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result {
+    func visit<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result
+}
+
+private protocol GroupRecordProtocol {
+    func member(metadata: Metadata) -> FormModel.Member
+    
+    func visit<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result
+}
+
+extension MemberRecord: FieldRecordProtocol {
+    func member(metadata: Metadata) -> FormModel.Member {
+        if let builder = self as? GroupRecordProtocol {
+            return builder.member(metadata: metadata)
+        } else {
+            return .init(representation: .field(metadata, id: metadata.id, ui: self))
+        }
+    }
+    
+    func visit<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result {
         builder.visit(field: field, id: id, using: presentation, through: self.binding)
     }
-    
-    func group<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result {
-        builder.visit(group: group, id: id, using: presentation, through: self.binding)
-    }
 }
 
-private protocol FieldMemberBuilding {
-    func member(metadata: Metadata) -> FormModel.Member
-}
-
-private protocol GroupMemberBuilding {
-    func member(metadata: Metadata) -> FormModel.Member
-}
-
-extension FieldRecord: FieldMemberBuilding {
+extension MemberRecord: GroupRecordProtocol where P: GroupPresenting {
     func member(metadata: Metadata) -> FormModel.Member {
-        .init(representation: .field(metadata, id: metadata.id, ui: self))
-    }
-}
-
-extension FieldRecord: GroupMemberBuilding where P: GroupPresenting {
-    func member(metadata: Metadata) -> FormModel.Member {
+        var `self` = self
         if let form = self.presentation.makeForm(metadata: metadata, binding: self.binding) {
             return .init(representation: .group(form, id: metadata.id, ui: self))
         } else {
             return .init(representation: .field(metadata, id: metadata.id, ui: self))
         }
+    }
+    
+    func visit<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result {
+        builder.visit(group: group, id: id, using: presentation, through: self.binding)
+    }
+}
+
+extension MemberRecord: CustomStringConvertible {
+    var description: String {
+        String(describing: self.presentation)
     }
 }
 
@@ -357,7 +411,7 @@ extension FormModel {
                 
         public static func group(
             model: FormModel,
-            ui presentation: some FieldPresenting<FormModel> = .section()
+            ui presentation: some GroupPresenting<FormModel> = .section()
         ) -> Self {
             .group(
                 bind(value: model),
@@ -368,7 +422,7 @@ extension FormModel {
         
         public static func group<T>(
             binding: any ValueBinding<T>,
-            ui presentation: some FieldPresenting<T>
+            ui presentation: some GroupPresenting<T>
         ) -> Self {
             .group(
                 binding,
@@ -394,12 +448,12 @@ extension FormModel {
         public static func group<T>( // Designated
             _ binding: any ValueBinding<T>,
             model: FormModel,
-            ui presentation: some FieldPresenting<T>
+            ui presentation: some GroupPresenting<T>
         ) -> Self {
             .init(representation: .group(
                 model,
                 id: NoID(),
-                ui: fieldRecord(presentation: presentation, binding: binding)
+                ui: groupRecord(presentation: presentation, binding: binding)
             ))
         }
         

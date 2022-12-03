@@ -25,54 +25,6 @@ private extension Presentations {
             self.body(field)
         }
     }
-    
-    struct GroupSectionFlattener: FieldVisiting {
-        enum Result {
-            case one(FormModel.Member)
-            case many([FormModel])
-        }
-        
-        func visit<Value>(
-            field: Metadata,
-            id: AnyHashable,
-            using presentation: some FieldPresenting<Value>,
-            through binding: some ValueBinding<Value>
-        ) -> Result {
-            .one(.field(binding, metadata: field, ui: presentation))
-        }
-        
-        func visit<Value>(
-            group: FormModel,
-            id: AnyHashable,
-            using presentation: some FieldPresenting<Value>,
-            through binding: some ValueBinding<Value>
-        ) -> Result {
-            guard let ui = presentation as? Group<Value>, case .section = ui else {
-                return .one(.group(binding, model: group, ui: presentation))
-            }
-            return .many(self.flatten(group))
-        }
-        
-        func flatten(_ group: FormModel) -> [FormModel] {
-            let result = group.fields(using: self)
-                .map { $0 }
-            
-            let head = FormModel(metadata: group.metadata) {
-                for case .one(let field) in result {
-                    field
-                }
-            }
-            let tail: [FormModel] = result.flatMap {
-                switch $0 {
-                case .one:
-                    return [] as [FormModel]
-                case .many(let models):
-                    return models
-                }
-            }
-            return [head] + tail
-        }
-    }
 }
 
 extension Presentations.Group: SwiftUIGroupPresenting {
@@ -113,16 +65,10 @@ extension Presentations.Group: SwiftUIGroupPresenting {
     public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         switch self {
         case .section(let section):
-            let flatModel = Presentations.GroupSectionFlattener().flatten(model)
-            print(flatModel)
-            
-            return flatModel.map { model in
-                let presentation = Presentations.GroupPresentationTrampoline<FormModel> { _ in
-                    SectionView(model: model, caption: section.caption).erased
-                }
-
-                return builder.visit(field: model.metadata, id: model.metadata.id, using: presentation, through: bind(value: model))
+            let presentation = Presentations.GroupPresentationTrampoline<FormModel> { _ in
+                SectionView(model: model, caption: section.caption).erased
             }
+            return [builder.visit(field: model.metadata, id: id, using: presentation, through: bind(value: model))]
 
         case .screen:
             let presentation = Presentations.GroupPresentationTrampoline<FormModel> { _ in

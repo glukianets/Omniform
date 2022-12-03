@@ -8,7 +8,7 @@ public protocol FieldPresenting<Value> {
 }
 
 public protocol GroupPresenting<Value>: FieldPresenting {
-    func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel?
+    mutating func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel?
 }
 
 public struct Presentations {
@@ -55,10 +55,73 @@ extension Presentations {
         
         case inline(Inline)
         
-        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+        public mutating func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
             var model = FormModel(binding)
             model.metadata = model.metadata.coalescing(with: metadata)
-            return model
+            self = .inline()
+            let result = FormModel(metadata:  model.metadata.coalescing(with: metadata)) {
+                for submodel in GroupSectionFlattener().flatten(model) {
+                    .group(model: submodel, ui: .section())
+                }
+            }
+            return result
+        }
+    }
+    
+    fileprivate struct GroupSectionFlattener: FieldVisiting {
+        enum Result {
+            case one(FormModel.Member)
+            case many([FormModel])
+        }
+        
+        func visit<Value>(
+            field: Metadata,
+            id: AnyHashable,
+            using presentation: some FieldPresenting<Value>,
+            through binding: some ValueBinding<Value>
+        ) -> Result {
+            .one(.field(binding, metadata: field, ui: presentation))
+        }
+        
+        func visit<Value>(
+            group: FormModel,
+            id: AnyHashable,
+            using presentation: some GroupPresenting<Value>,
+            through binding: some ValueBinding<Value>
+        ) -> Result {
+            switch presentation as? Group<Value> {
+            case nil, .screen:
+                return .one(.group(binding, model: group, ui: presentation))
+            case .section, .inline:
+                break
+            }
+            return .many(self.flatten(group))
+        }
+        
+        func flatten(_ group: FormModel) -> [FormModel] {
+            let result = group.fields(using: self)
+            
+            let head: [FormModel.Member] = result.compactMap {
+                guard case .one(let field) = $0 else { return nil }
+                return field
+            }
+            
+            let tail: [FormModel] = result.flatMap {
+                switch $0 {
+                case .one:
+                    return [] as [FormModel]
+                case .many(let models):
+                    return models
+                }
+            }
+            
+            if tail.isEmpty {
+                return [group]
+            } else if head.isEmpty {
+                return tail
+            } else {
+                return [FormModel(metadata: group.metadata, prototype: .init(members: head))] + tail
+            }
         }
     }
 }
@@ -153,8 +216,8 @@ extension Presentations {
         }
        
         public struct Plain {
-            public let style: Style
-            public let prompt: Metadata.Text?
+            public internal(set) var style: Style
+            public internal(set) var prompt: Metadata.Text?
             private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
             
             @usableFromInline
@@ -172,8 +235,8 @@ extension Presentations {
         }
         
         public struct Secure {
-            public let style: Style
-            public let prompt: Metadata.Text?
+            public internal(set) var style: Style
+            public internal(set) var prompt: Metadata.Text?
             private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
             
             @usableFromInline
@@ -191,9 +254,9 @@ extension Presentations {
         }
         
         public struct Format {
-            public let format: AnyParseableFormatStyle<Value, String>
-            public let style: Style
-            public let prompt: Metadata.Text?
+            public internal(set) var format: AnyParseableFormatStyle<Value, String>
+            public internal(set) var style: Style
+            public internal(set) var prompt: Metadata.Text?
 
             @available(iOS 15.0, *)
             public init<F>(
@@ -211,7 +274,7 @@ extension Presentations {
         case secure(Secure)
         case format(Format)
         
-        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+        public mutating func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
             let style: Style
             let prompt: Metadata.Text?
             switch self {
@@ -239,7 +302,20 @@ extension Presentations {
                 return FormModel(name: metadata.name, icon: metadata.icon) {
                     .field(binding, metadata: metadata, ui: self)
                 }
-            case .custom(let presentation):
+            case .custom(var presentation):
+                defer {
+                    switch self {
+                    case .plain(var content):
+                        content.style = .custom(presentation)
+                        self = .plain(content)
+                    case .secure(var content):
+                        content.style = .custom(presentation)
+                        self = .secure(content)
+                    case .format(var content):
+                        content.style = .custom(presentation)
+                        self = .format(content)
+                    }
+                }
                 return presentation.makeForm(metadata: metadata, binding: binding)
             }
         }
@@ -796,18 +872,18 @@ extension Presentations {
         public typealias Field = Field
         public typealias Group = Group
         
-        public let groupPresentation: Group?
-        public let fieldPresentation: Field
+        public private(set) var groupPresentation: Group?
+        public private(set) var fieldPresentation: Field
         
         public init(_ fieldPresentation: Field, inside groupPresenation: Group? = nil) {
             self.groupPresentation = groupPresenation
             self.fieldPresentation = fieldPresentation
         }
         
-        public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
+        public mutating func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
             if let group = self.groupPresentation as? Presentations.Group<Value>, case .inline = group { return nil }
 
-            return .init(name: metadata.name, icon: metadata.icon) {
+            return FormModel(metadata: metadata) {
                 .field(binding, metadata: metadata, ui: self.fieldPresentation)
             }
         }
