@@ -108,19 +108,19 @@ public enum Samples {
                 }
             }
 
-            @Field(icon: "gauge.high", ui: .screen())
+            @Field(icon: "gauge.high", ui: .section())
             var values = Values()
 
-            @Field(icon: "keyboard", ui: .screen())
+            @Field(icon: "keyboard", ui: .section())
             var inputs = Inputs()
 
-            @Field(icon: "eyedropper", ui: .screen())
+            @Field(icon: "eyedropper", ui: .section())
             var pickers = Pickers()
             
-            @Field(icon: "cursorarrow.rays", ui: .screen())
+            @Field(icon: "cursorarrow.rays", ui: .section())
             var buttons = Buttons()
             
-            @Field(icon: "questionmark.diamond", ui: .screen())
+            @Field(icon: "questionmark.diamond", ui: .section())
             var dynamic = Dynamic()
 
         }
