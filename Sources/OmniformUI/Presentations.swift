@@ -9,7 +9,7 @@ public protocol SwiftUIFieldPresenting<Value>: FieldPresenting {
 }
 
 public protocol SwiftUIGroupPresenting<Value>: GroupPresenting {
-    func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R
+    func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R]
 }
 
 // MARK: - Group
@@ -62,21 +62,25 @@ extension Presentations.Group: SwiftUIGroupPresenting {
         }
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
-        let presentation = Presentations.GroupPresentationTrampoline<FormModel> { _ in
-            SwiftUI.Group {
-                switch self {
-                case .section(let section):
-                    SectionView(model: model, caption: section.caption).erased
-                case .screen:
-                    NavigationLinkView(model: model).erased
-                case .inline:
-                    OmniformContentView(model: model)
-                }
-            }.erased
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
+        let presentation: Presentations.GroupPresentationTrampoline<FormModel>
+        
+        switch self {
+        case .section(let section):
+            presentation = .init { _ in
+                SectionView(model: model, caption: section.caption).erased
+            }
+        case .screen:
+            presentation = .init { _ in
+                NavigationLinkView(model: model).erased
+            }
+        case .inline:
+            presentation = .init { _ in
+                OmniformContentView(model: model).erased
+            }
         }
 
-        return builder.visit(field: model.metadata, id: id, using: presentation, through: bind(value: model))
+        return [builder.visit(field: model.metadata, id: id, using: presentation, through: bind(value: model))]
     }
 }
 
@@ -96,11 +100,11 @@ extension Presentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting 
     
     public typealias Body = AnyView
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         if let presentation = self.groupPresentation as? any SwiftUIGroupPresenting {
             return presentation.body(for: model, id: id, builder: builder)
         } else {
-            fatalError("Unreachable?")
+            return []
         }
     }
 }
@@ -322,7 +326,7 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
         return Content(metadata: field, binding: binding.forSwiftUI, presentation: self).erased
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         let style: Style
         switch self {
         case .plain(let content):
@@ -344,8 +348,7 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
             if let swiftUIPresenting = presentation as? (any SwiftUIGroupPresenting) {
                 return swiftUIPresenting.body(for: model, id: id, builder: builder)
             } else {
-                // TODO: implement through field presentation?
-                fatalError("unimplement")
+                return [] // TODO: Warn?
             }
         }
     }
@@ -488,7 +491,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
         return PickerView(presentation: self, field: field, binding: swiftUIBinding, canDeselect: canDeselect).erased
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
+    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
         let binding = bind { () -> Value in
             preconditionFailure("Faux binding for type \(Value.self) shouldn't be called")
         }

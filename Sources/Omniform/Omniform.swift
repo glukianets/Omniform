@@ -34,7 +34,7 @@ public protocol FieldVisiting<Result> {
     func visit<Value>(
         group: FormModel,
         id: AnyHashable,
-        using presentation: some FieldPresenting<Value>,
+        using presentation: some GroupPresenting<Value>,
         through binding: some ValueBinding<Value>
     ) -> Result
 }

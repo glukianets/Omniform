@@ -17,8 +17,8 @@ public struct FormModel {
     }
     
     fileprivate enum Record: Identifiable {
-        case field(Metadata, id: AnyHashable, ui: any MemberProtocol)
-        case group(FormModel, id: AnyHashable, ui: any MemberProtocol)
+        case field(Metadata, id: AnyHashable, ui: any FieldRecordProtocol)
+        case group(FormModel, id: AnyHashable, ui: any GroupRecordProtocol)
         
         public var id: AnyHashable {
             get {
@@ -66,8 +66,30 @@ public struct FormModel {
         @Builder builder: () -> Prototype
     ) {
         let metadata = Metadata(type: FormModel.self, id: Member.NoID(), name: name, icon: icon)
-        let prototype = builder()
-        self = .init(metadata: metadata, members: prototype.members)
+        self = .init(metadata: metadata, builder: builder)
+    }
+    
+    /// Builds a new model instance using convenient resultBuilder-based syntax
+    ///
+    /// You can call various static methods on ``Member`` to produce desired elements:
+    /// ```swift
+    /// FormModel(name: "To-do list") {
+    ///     .field(self.dataModel.$walkTheDog, name: "Walk the dog", presentaton: .toggle);
+    ///     .group(name: "Groceries") {
+    ///        .field(self.dataModel.$groceries.eggs, name: "Eggs");
+    ///        .field(self.dataModel.$groceries.milk, name: "Milk");
+    ///    }
+    /// }
+    /// ```
+    /// - Parameters:
+    ///   - name: name
+    ///   - icon: icon
+    ///   - builder: form builder
+    public init(
+        metadata: Metadata,
+        @Builder builder: () -> Prototype
+    ) {
+        self = .init(metadata: metadata, prototype: builder())
     }
     
     /// Builds a new form model instance by reflecting provided value binding
@@ -84,12 +106,14 @@ public struct FormModel {
         }
     }
     
-    internal init(
-        name: Metadata.Text? = nil,
-        icon: Metadata.Image? = nil,
+    /// Builds a new form model instance directly from metadata and prototype
+    /// - Parameters:
+    ///   - metadata: metadata
+    ///   - prototype: prototype
+    public init(
+        metadata: Metadata,
         prototype: Prototype
     ) {
-        let metadata = Metadata(type: Self.self, id: Member.NoID(), name: name, icon: icon)
         self = .init(metadata: metadata, members: prototype.members)
     }
 
@@ -111,7 +135,15 @@ public struct FormModel {
     /// - Parameter visitor: visitor that builds elements from provided form fields
     /// - Returns: a collection of elements built from this form's fields
     public func fields<Visitor: FieldVisiting>(using visitor: Visitor) -> some RandomAccessCollection<Visitor.Result> {
-        FieldsCollection<Visitor>(model: self, visitor: visitor)
+        
+        self.members.lazy.map { record in
+            switch record {
+            case .group(let model, id: let id, ui: let trampoline):
+                return trampoline.visit(group: model, id: id, builder: visitor)
+            case .field(let field, id: let id, ui: let trampoline):
+                return trampoline.visit(field: field, id: id, builder: visitor)
+            }
+        }
     }
     
     /// Filters a form to match seqrch query
@@ -127,9 +159,9 @@ public struct FormModel {
             case .group(let model, id: let id, ui: _):
                 return model.filtered(using: query).flatMap {
                     !$0.members.isEmpty ? FormModel.Member.group(
+                        bind(value: $0),
                         model: $0,
-                        ui: Presentations.Group<FormModel>.section(),
-                        binding: bind(value: $0)
+                        ui: Presentations.Group<FormModel>.section()
                     ).with(id: id).representation : nil
                 }
             default:
@@ -145,68 +177,121 @@ extension FormModel: CustomFormPresentable {
     }
 }
 
-// MARK: - Building
-
-private protocol MemberProtocol {
-    func field<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result
-    func group<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result
-}
-
-extension MemberProtocol {
-    func member(metadata: Metadata) -> FormModel.Member {
-        if let builder = self as? GroupMemberBuilding {
-            return builder.member(metadata: metadata)
-        } else if let builder = self as? FieldMemberBuilding {
-            return builder.member(metadata: metadata)
-        } else {
-            fatalError("Self is not [Field|Group]MemberBuilding")
+extension FormModel: CustomStringConvertible {
+    public var description: String {
+        func describe(metadata: Metadata) -> String? {
+            let icon: String? = metadata.icon.map {
+                switch $0 {
+                case .system(let content):
+                    return "icon: \'\(content.name)\'"
+                case .custom(let content):
+                    return "icon: \"\(content.name)\""
+                case .native(let content):
+                    return "icon: \(ObjectIdentifier(content.image))"
+                }
+            }
+            
+            let name: String? = metadata.name.map {
+                switch $0 {
+                case .text(let content):
+                    return "name: \"\(content.key)\""
+                }
+            }
+            
+            let fields = [name, icon].compactMap { $0 }
+            return fields.isEmpty ? nil : fields.joined(separator: ", ")
         }
+        
+        let members = self.members.map { record in
+            switch record {
+            case let .field(metadata, id: _, ui: ui):
+                return """
+                @Field(ui: \(ui)\(describe(metadata: metadata).map { ", \($0)" } ?? ""))
+                """
+            case let .group(form, id: _, ui: ui):
+                return """
+                @Group(ui: \(ui)) \(form)
+                """
+            }
+        }.joined(separator: "\n").indent("    ")
+        
+        return """
+        Form(\(describe(metadata: metadata) ?? "")) {
+        \(members)
+        }
+        """
     }
 }
 
-private func fieldRecord<P, B>(presentation: P, binding: B) -> MemberProtocol
+// MARK: - Building
+
+private func fieldRecord<P, B>(presentation: P, binding: B) -> any FieldRecordProtocol
 where
     P: FieldPresenting,
     B: ValueBinding,
     P.Value == B.Value
 {
-    FieldRecord<P, B>(presentation: presentation, binding: binding)
+    MemberRecord<P, B>(presentation: presentation, binding: binding)
 }
 
-private struct FieldRecord<P: FieldPresenting, B: ValueBinding>: MemberProtocol where P.Value == B.Value {
-    let presentation: P
-    let binding: B
+private func groupRecord<P, B>(presentation: P, binding: B) -> any GroupRecordProtocol
+where
+    P: GroupPresenting,
+    B: ValueBinding,
+    P.Value == B.Value
+{
+    MemberRecord<P, B>(presentation: presentation, binding: binding)
+}
+
+private struct MemberRecord<P: FieldPresenting, B: ValueBinding> where P.Value == B.Value {
+    var presentation: P
+    var binding: B
+}
+
+private protocol FieldRecordProtocol {
+    func member(metadata: Metadata) -> FormModel.Member
     
-    func field<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result {
+    func visit<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result
+}
+
+private protocol GroupRecordProtocol {
+    func member(metadata: Metadata) -> FormModel.Member
+    
+    func visit<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result
+}
+
+extension MemberRecord: FieldRecordProtocol {
+    func member(metadata: Metadata) -> FormModel.Member {
+        if let builder = self as? GroupRecordProtocol {
+            return builder.member(metadata: metadata)
+        } else {
+            return .init(representation: .field(metadata, id: metadata.id, ui: self))
+        }
+    }
+    
+    func visit<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result {
         builder.visit(field: field, id: id, using: presentation, through: self.binding)
     }
-    
-    func group<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result {
-        builder.visit(group: group, id: id, using: presentation, through: self.binding)
-    }
 }
 
-private protocol FieldMemberBuilding {
-    func member(metadata: Metadata) -> FormModel.Member
-}
-
-private protocol GroupMemberBuilding {
-    func member(metadata: Metadata) -> FormModel.Member
-}
-
-extension FieldRecord: FieldMemberBuilding {
+extension MemberRecord: GroupRecordProtocol where P: GroupPresenting {
     func member(metadata: Metadata) -> FormModel.Member {
-        .init(representation: .field(metadata, id: metadata.id, ui: self))
-    }
-}
-
-extension FieldRecord: GroupMemberBuilding where P: GroupPresenting {
-    func member(metadata: Metadata) -> FormModel.Member {
+        var `self` = self
         if let form = self.presentation.makeForm(metadata: metadata, binding: self.binding) {
             return .init(representation: .group(form, id: metadata.id, ui: self))
         } else {
             return .init(representation: .field(metadata, id: metadata.id, ui: self))
         }
+    }
+    
+    func visit<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result {
+        builder.visit(group: group, id: id, using: presentation, through: self.binding)
+    }
+}
+
+extension MemberRecord: CustomStringConvertible {
+    var description: String {
+        String(describing: self.presentation)
     }
 }
 
@@ -279,44 +364,6 @@ extension CustomFormPresentableDispatch: CustomFormTrampoline where T: CustomFor
     }
 }
 
-// MARK: FieldsCollection
-
-extension FormModel {
-    private struct FieldsCollection<Visitor: FieldVisiting>: RandomAccessCollection {
-        public typealias Element = Visitor.Result
-        public typealias Index = Int
-        
-        private let visitor: Visitor
-        private let model: FormModel
-        
-        public var startIndex: Index {
-            return self.model.members.startIndex
-        }
-        
-        public var endIndex: Index {
-            return self.model.members.endIndex
-        }
-        
-        fileprivate init(model: FormModel, visitor: Visitor) {
-            self.visitor = visitor
-            self.model = model
-        }
-        
-        public func index(after i: Index) -> Index {
-            i + 1
-        }
-        
-        public subscript(index: Index) -> Visitor.Result {
-            switch self.model.members[index] {
-            case .group(let model, id: let id, ui: let trampoline):
-                return trampoline.group(group: model, id: id, builder: self.visitor)
-            case .field(let field, id: let id, ui: let trampoline):
-                return trampoline.field(field: field, id: id, builder: self.visitor)
-            }
-        }
-    }
-}
-
 // MARK: Prototype
 
 extension FormModel {
@@ -324,7 +371,9 @@ extension FormModel {
     public struct Prototype {
         fileprivate let members: [Member]
         
-        fileprivate init(members: [Member]) {
+        /// Create instance directly from members
+        /// - Parameter members: members
+        public init(members: [Member]) {
             self.members = members
         }
         
@@ -362,23 +411,23 @@ extension FormModel {
                 
         public static func group(
             model: FormModel,
-            ui presentation: Presentations.Group<FormModel> = .section()
+            ui presentation: some GroupPresenting<FormModel> = .section()
         ) -> Self {
             .group(
+                bind(value: model),
                 model: model,
-                ui: presentation,
-                binding: bind(value: model)
+                ui: presentation
             )
         }
         
         public static func group<T>(
             binding: any ValueBinding<T>,
-            ui presentation: some FieldPresenting<T>
+            ui presentation: some GroupPresenting<T>
         ) -> Self {
             .group(
+                binding,
                 model: FormModel(binding),
-                ui: presentation,
-                binding: binding
+                ui: presentation
             )
         }
         
@@ -388,23 +437,23 @@ extension FormModel {
             ui presentation: Presentations.Group<FormModel> = .section(),
             @Builder _ builder: () -> Prototype
         ) -> Self {
-            let model = FormModel(name: name, icon: icon, prototype: builder())
+            let model = FormModel(name: name, icon: icon, builder: builder)
             return .group(
+                bind(value: model),
                 model: model,
-                ui: presentation,
-                binding: bind(value: model)
+                ui: presentation
             )
         }
         
-        internal static func group<T>( // Designated
+        public static func group<T>( // Designated
+            _ binding: any ValueBinding<T>,
             model: FormModel,
-            ui presentation: some FieldPresenting<T>,
-            binding: any ValueBinding<T>
+            ui presentation: some GroupPresenting<T>
         ) -> Self {
             .init(representation: .group(
                 model,
                 id: NoID(),
-                ui: fieldRecord(presentation: presentation, binding: binding)
+                ui: groupRecord(presentation: presentation, binding: binding)
             ))
         }
         
