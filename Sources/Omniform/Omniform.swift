@@ -2,6 +2,7 @@ import Foundation
 
 // MARK: - PropertyWrapper
 
+/// A typpe that acts as a read-only property wrapper
 public protocol PropertyWrapper {
     associatedtype WrappedValue
     
@@ -10,12 +11,16 @@ public protocol PropertyWrapper {
 
 // MARK: - WritablePropertyWrapper
 
+/// A type that acts as a writable property wrapper
 public protocol WritablePropertyWrapper: PropertyWrapper {
     var wrappedValue: WrappedValue { get set }
 }
 
 // MARK: - FieldVisiting
 
+/// A type that presents ``FormModel`` members in a uniform manner
+///
+/// See ``FormModel/fields(using:)`` for usage.
 public protocol FieldVisiting<Result> {
     associatedtype Result
     
@@ -29,137 +34,178 @@ public protocol FieldVisiting<Result> {
     func visit<Value>(
         group: FormModel,
         id: AnyHashable,
-        using presentation:
-        some FieldPresenting<Value>,
+        using presentation: some FieldPresenting<Value>,
         through binding: some ValueBinding<Value>
     ) -> Result
 }
 
 // MARK: - CustomFieldsContaining
 
+/// A type that has customized ``FormModel`` representatoin
 public protocol CustomFormPresentable: CustomFieldPresentable {
-    static var dataModelTitle: String { get }
+    static func formModel(for binding: some ValueBinding<Self>) -> FormModel
+}
+
+extension CustomFormPresentable {
+    public static var preferredPresentation: Presentations.Group<Self> {
+        .section()
+    }
+}
+
+extension CustomFormPresentable where Self: CustomFormBuilding {
+    public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
+        let builder: () -> FormModel.Prototype = { self.buildForm(binding) }
+        return FormModel(name: self.formName, icon: self.formIcon, builder: builder)
+    }
+}
+
+// MARK: - CustomFieldsBuilding
+
+/// A type that builds its own custom ``FormModel`` representation
+///
+/// Conform to this protocol instead of ``CustomFieldPresentable`` when you only
+/// want to adjust a few separate things about how your type is presented as form
+public protocol CustomFormBuilding: CustomFormPresentable {
+    static var formName: Metadata.Text? { get }
+    static var formIcon: Metadata.Image? { get }
     
-    static func dataModel(through binding: any ValueBinding<Self>) -> FormModel?
+    @FormModel.Builder
+    static func buildForm(_ binding: some ValueBinding<Self>) -> FormModel.Prototype
 }
 
-extension CustomFormPresentable {
-    public static var preferredPresentation: FieldPresentations.Group<Self> {
-        FieldPresentations.Group<Self>.screen()
+extension CustomFormBuilding {
+    public static var formName: Metadata.Text? {
+        .runtime(self)
     }
-}
-
-extension CustomFormPresentable {
-    public static var dataModelTitle: String {
-        String(describing: Self.self)
-    }
-
-    public static func dataModel(through binding: any ValueBinding<Self>) -> FormModel? {
+    
+    public static var formIcon: Metadata.Image? {
         nil
+    }
+    
+    public static func buildForm(_ binding: some ValueBinding<Self>) -> FormModel.Prototype {
+        .init(reflecting: binding)
     }
 }
 
 // MARK: - FieldPresentable
 
+/// A type that is presentable inside ``FormModel``
+///
+/// ``FormModel`` will recognize properties of this type as viable fields even
+/// when they're not marked with ``Field`` property wrapper
 public protocol CustomFieldPresentable {
     associatedtype PreferredPresentation: FieldPresenting<Self>
     
+    /// Presentation that is used when none other is specified
     static var preferredPresentation: PreferredPresentation { get }
 }
 
 extension Bool: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.Toggle {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .toggle
     }
 }
 
 extension String: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Character: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Float: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Double: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int8: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int16: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int32: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension Int64: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt8: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt16: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt32: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
 extension UInt64: CustomFieldPresentable {
-    public static var preferredPresentation: FieldPresentations.TextInput<Self> {
+    public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
     }
 }
 
+@available(iOS 16.0, macOS 13, *)
+extension URL: CustomFieldPresentable {
+    public static var preferredPresentation: some FieldPresenting<Self> {
+        .input(format: .url)
+    }
+}
+
 extension Optional: CustomFieldPresentable where Wrapped: CustomFieldPresentable & Equatable & _DefaultInitializable {
-    public static var preferredPresentation: FieldPresentations.Nullified<Self, Wrapped.PreferredPresentation> {
-        .init(wrapped: Wrapped.preferredPresentation, nilValue: Wrapped.init())
+    public static var preferredPresentation: Presentations.Nullified<Self, Wrapped.PreferredPresentation> {
+        Wrapped.preferredPresentation.nullifying(when: Wrapped.init())
+    }
+}
+
+extension CustomFieldPresentable where Self: Hashable & CaseIterable {
+    public static var preferredPresentation: Presentations.Picker<Self> {
+        .picker()
     }
 }
 

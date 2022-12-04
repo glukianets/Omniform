@@ -5,15 +5,15 @@ import PackageDescription
 
 let package = Package(
     name: "Omniform",
-    platforms: [.iOS(.v14)],
+    platforms: [.iOS(.v14), .macOS(.v12)],
     products: [
         .library(
             name: "Omniform",
             targets: ["Omniform"]
         ),
         .library(
-            name: "Omniform-SwiftUI",
-            targets: ["Omniform-SwiftUI"]
+            name: "OmniformUI",
+            targets: ["OmniformUI"]
         ),
 
     ],
@@ -26,7 +26,7 @@ let package = Package(
             dependencies: []
         ),
         .target(
-            name: "Omniform-SwiftUI",
+            name: "OmniformUI",
             dependencies: ["Omniform"]
         ),
         .testTarget(

@@ -3,29 +3,51 @@ import SwiftUI
 
 // MARK: -
 
+/// Stores a value and creates binding to it
+/// - Parameter value: stored value
+/// - Returns: read-only binding
 public func bind<Value>(value: Value) -> any ValueBinding<Value>  {
     bind(value: value, through: \.self)
 }
 
+/// Stores a value and creates binding to its property denoted by `keyPath`
+/// - Parameters:
+///   - root: stored value
+///   - keyPath: key path to the presented value
+/// - Returns: read-only binding
 public func bind<Root, Value>(value root: Root, through keyPath: KeyPath<Root, Value>) -> any ValueBinding<Value> {
     KeyPathBinding(from: root, through: keyPath).normalized
 }
 
+/// Stores a reference to given object and creates value binding to its property denoted by `keyPath`
+/// - Parameters:
+///   - root: object
+///   - keyPath: key path to the presented value
+/// - Returns: writable binding
 public func bind<Root: AnyObject, Value>(object root: Root, through keyPath: ReferenceWritableKeyPath<Root, Value>
 ) -> any WritableValueBinding<Value> {
     KeyPathBinding<Root, Value, ReferenceWritableKeyPath<Root, Value>>(from: root, through: keyPath)
 }
 
+/// Creates binding to a value accessed through block
+/// - Parameter get: block that will be called on each value access
+/// - Returns: read-only binding
 public func bind<Value>(get: @escaping () -> Value) -> any ValueBinding<Value> {
     ClosureBinding(get)
 }
 
+/// Creates binding to a value accessed and mutated through respective blocks
+/// - Parameters:
+///   - get: block that will be called on each value access
+///   - set: block that will be called on each value mutation
+/// - Returns: writable binding
 public func bind<Value>(get: @escaping () -> Value, set: @escaping (Value) -> Void) -> any WritableValueBinding<Value> {
     ClosureBinding(get, set: set)
 }
 
 // MARK: - ValueBinding
 
+/// A type that can read value stored externally
 public protocol ValueBinding<Value> {
     associatedtype Value
     
@@ -44,6 +66,7 @@ public protocol ValueBinding<Value> {
 
 // MARK: - WritableValueBinding
 
+/// A type that can read and write value stored externally
 public protocol WritableValueBinding<Value>: ValueBinding {
     var value: Value { get nonmutating set }
     

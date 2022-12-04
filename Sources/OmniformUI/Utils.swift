@@ -24,7 +24,7 @@ internal struct DynamicView<T: View>: View {
 internal enum ScrollDismissesKeyboardMode {
     case automatic, immediately, interactively, never
     
-    @available(iOS 16, *)
+    @available(iOS 16, macOS 13, *)
     internal var nativeValue: SwiftUI.ScrollDismissesKeyboardMode {
         switch self {
         case .automatic:
@@ -39,7 +39,7 @@ internal enum ScrollDismissesKeyboardMode {
     }
 }
 
-@available(iOS 16, *)
+@available(iOS 16, macOS 13, *)
 internal struct ScrollDismissesKeyboardModifier: ViewModifier {
     var mode: ScrollDismissesKeyboardMode
     
@@ -51,7 +51,7 @@ internal struct ScrollDismissesKeyboardModifier: ViewModifier {
 internal extension View {
     @ViewBuilder
     func scrollDismissesKeyboard(_ mode: ScrollDismissesKeyboardMode) -> some View {
-        if #available(iOS 16, *) {
+        if #available(iOS 16, macOS 13, *) {
             self.modifier(ScrollDismissesKeyboardModifier(mode: mode))
         } else {
             self
@@ -83,7 +83,7 @@ internal extension String {
 
 internal extension Metadata {
     var displayName: String {
-        self.name ?? self.externalName ?? ""
+        self.name?.description ?? ""
     }
 }
 

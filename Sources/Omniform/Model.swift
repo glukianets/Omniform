@@ -2,9 +2,12 @@ import Foundation
 
 // MARK: - Model
 
+/// A dynamic form data model type
 public struct FormModel {
+    /// Dynamic form creation options
     public struct Options: OptionSet {
-        public static var includeUnmarked = Self(rawValue: 1 << 0)
+        /// When this flag is set, model ignores fields that aren't marked with ``Field`` property wrapper
+        public static var excludeUnmarked = Self(rawValue: 1 << 0)
         
         public var rawValue: UInt
 
@@ -13,124 +16,132 @@ public struct FormModel {
         }
     }
     
-    private struct FieldsCollection<Visitor: FieldVisiting>: RandomAccessCollection {
-        public typealias Element = Visitor.Result
-        public typealias Index = Int
-        
-        private let visitor: Visitor
-        private let model: FormModel
-
-        public var startIndex: Index {
-            return self.model.members.startIndex
-        }
-        
-        public var endIndex: Index {
-            return self.model.members.endIndex
-        }
-        
-        fileprivate init(model: FormModel, visitor: Visitor) {
-            self.visitor = visitor
-            self.model = model
-        }
-
-        public func index(after i: Index) -> Index {
-            i + 1
-        }
-        
-        public subscript(index: Index) -> Visitor.Result {
-            switch self.model.members[index] {
-            case .group(let model, id: let id, ui: let trampoline):
-                return trampoline.group(group: model, id: id, builder: self.visitor)
-            case .field(let field, id: let id, ui: let trampoline):
-                return trampoline.field(field: field, id: id, builder: self.visitor)
-            }
-        }
-    }
-    
-    fileprivate enum Member: Identifiable {
+    fileprivate enum Record: Identifiable {
         case field(Metadata, id: AnyHashable, ui: any MemberProtocol)
         case group(FormModel, id: AnyHashable, ui: any MemberProtocol)
         
         public var id: AnyHashable {
-            switch self {
-            case .field(_, id: let id, ui: _), .group(_, id: let id, ui: _):
-                return id
+            get {
+                switch self {
+                case .field(_, id: let id, ui: _), .group(_, id: let id, ui: _):
+                    return id
+                }
+            }
+            set {
+                switch self {
+                case let .field(metadata, id: _, ui: ui):
+                    self = .field(metadata, id: newValue, ui: ui)
+                case let .group(model, id: _, ui: ui):
+                    self = .group(model, id: newValue, ui: ui)
+                }
             }
         }
     }
     
     private static let cache = MirrorCache()
-
+    
+    /// This form's metadata
     public var metadata: Metadata
-    private var members: [Member]
+    private var members: [Record]
+    
+    /// Builds a new model instance using convenient resultBuilder-based syntax
+    ///
+    /// You can call various static methods on ``Member`` to produce desired elements:
+    /// ```swift
+    /// FormModel(name: "To-do list") {
+    ///     .field(self.dataModel.$walkTheDog, name: "Walk the dog", presentaton: .toggle);
+    ///     .group(name: "Groceries") {
+    ///        .field(self.dataModel.$groceries.eggs, name: "Eggs");
+    ///        .field(self.dataModel.$groceries.milk, name: "Milk");
+    ///    }
+    /// }
+    /// ```
+    /// - Parameters:
+    ///   - name: name
+    ///   - icon: icon
+    ///   - builder: form builder
+    public init(
+        name: Metadata.Text? = nil,
+        icon: Metadata.Image? = nil,
+        @Builder builder: () -> Prototype
+    ) {
+        let metadata = Metadata(type: FormModel.self, id: Member.NoID(), name: name, icon: icon)
+        let prototype = builder()
+        self = .init(metadata: metadata, members: prototype.members)
+    }
+    
+    /// Builds a new form model instance by reflecting provided value binding
+    /// - Parameters:
+    ///   - binding: binding to the root value. Changes inside ui will be reflected back through it.
+    ///   - options: form building options. See ``Options`` for further explanation.
+    public init<S>(_ binding: some ValueBinding<S>, options: Options = []) {
+        if let trampoline = CustomFormPresentableDispatch(type: S.self, binding: binding) as? CustomFormTrampoline {
+            self = trampoline.form
+        } else {
+            let metadata = Metadata(type: S.self, id: \S.self, externalName: String(describing: S.self))
+            let members = Prototype(reflecting: binding, options: options).members
+            self.init(metadata: metadata, members: members)
+        }
+    }
+    
+    internal init(
+        name: Metadata.Text? = nil,
+        icon: Metadata.Image? = nil,
+        prototype: Prototype
+    ) {
+        let metadata = Metadata(type: Self.self, id: Member.NoID(), name: name, icon: icon)
+        self = .init(metadata: metadata, members: prototype.members)
+    }
 
+    private init(metadata: Metadata, members: [Member]) {
+        self.init(metadata: metadata, records: members.enumerated().map { i, m in m.with(id: i) }.map(\.representation))
+    }
+    
+    private init(metadata: Metadata, records: [Record]) {
+        self.metadata = metadata
+        self.members = records
+    }
+    
+    /// Builds a collection of form fields elements
+    ///
+    /// Since forms doesn't store their fields in some uniform way, you have to provide your custom
+    /// ``FieldVisiting`` object that can represent them as a single type.
+    /// - Note The returned collection will call respective visitor members at each access.
+    ///
+    /// - Parameter visitor: visitor that builds elements from provided form fields
+    /// - Returns: a collection of elements built from this form's fields
     public func fields<Visitor: FieldVisiting>(using visitor: Visitor) -> some RandomAccessCollection<Visitor.Result> {
         FieldsCollection<Visitor>(model: self, visitor: visitor)
     }
-
-    public init<S>(through binding: any ValueBinding<S>, options: Options = []) {
-        if #available(iOS 16, macOS 13, *) {
-            if
-                let customType = S.self as? any CustomFormPresentable.Type,
-                let model = customType.dataModel(throughErased: binding)
-            {
-                self = model
-                return
-            }
-        }
-        
-        self.init(_through: binding, options: options)
-    }
     
-    private init<S>(_through binding: any ValueBinding<S>, options: Options = []) {
-        if #available(iOS 16, macOS 13, *) {
-            if
-                let customType = S.self as? any CustomFormPresentable.Type,
-                let model = customType.dataModel(throughErased: binding)
-            {
-                self = model
-                return
-            }
-        }
-        
-        let members: [Member] = Self.cache[for: S.self].children.compactMap { child in
-            if let type = type(of: child.keyPath).valueType as? any FieldProtocol.Type {
-                return type.build(from: binding, through: child.keyPath, name: child.label)
-            } else if options.contains(.includeUnmarked), let type = type(of: child.keyPath).valueType as? any CustomFieldPresentable.Type {
-                return type.build(from: binding, through: child.keyPath, name: child.label)
-            } else {
-                return nil
-            }
-        }
-        
-        var metadata = Metadata(type: S.self, id: \S.self, externalName: String(describing: S.self))
-        if let customType = S.self as? any CustomFormPresentable.Type {
-            metadata = metadata.with(externalName: customType.dataModelTitle)
-        }
-        
-        self.init(metadata: metadata, members: members)
-    }
-    
-    private init(metadata: Metadata, members: [Member]) {
-        self.metadata = metadata
-        self.members = members
-    }
-    
+    /// Filters a form to match seqrch query
+    /// - Parameter query: string to match with lose text search
+    /// - Returns: a derived form that only contains matching members or nil if nothing was found
     public func filtered(using query: String) -> Self? {
         guard !query.isEmpty else { return self }
 
-        return .init(metadata: self.metadata, members: self.members.compactMap {
+        return .init(metadata: self.metadata, records: self.members.compactMap {
             switch $0 {
             case .field(let metadata, id: _, ui: _) where metadata.matches(query: query):
                 return $0
             case .group(let model, id: let id, ui: _):
-                return model.filtered(using: query).map {
-                    .group($0, id: id, ui: FieldPresentations.Group<FormModel>(kind: .section(caption: nil)).bundle(with: bind(value: $0)))
+                return model.filtered(using: query).flatMap {
+                    !$0.members.isEmpty ? FormModel.Member.group(
+                        model: $0,
+                        ui: Presentations.Group<FormModel>.section(),
+                        binding: bind(value: $0)
+                    ).with(id: id).representation : nil
                 }
             default:
                 return nil
             }
         })
+    }
+}
+
+extension FormModel: CustomFormPresentable {
+    public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
+        binding.value
     }
 }
 
@@ -141,15 +152,30 @@ private protocol MemberProtocol {
     func group<FB: FieldVisiting>(group: FormModel, id: AnyHashable, builder: FB) -> FB.Result
 }
 
-private extension FieldPresenting {
-    func bundle(with binding: any ValueBinding<Self.Value>) -> any MemberProtocol {
-        FieldRecord(presentation: self, binding: binding)
+extension MemberProtocol {
+    func member(metadata: Metadata) -> FormModel.Member {
+        if let builder = self as? GroupMemberBuilding {
+            return builder.member(metadata: metadata)
+        } else if let builder = self as? FieldMemberBuilding {
+            return builder.member(metadata: metadata)
+        } else {
+            fatalError("Self is not [Field|Group]MemberBuilding")
+        }
     }
 }
 
-private struct FieldRecord<P: FieldPresenting>: MemberProtocol {
+private func fieldRecord<P, B>(presentation: P, binding: B) -> MemberProtocol
+where
+    P: FieldPresenting,
+    B: ValueBinding,
+    P.Value == B.Value
+{
+    FieldRecord<P, B>(presentation: presentation, binding: binding)
+}
+
+private struct FieldRecord<P: FieldPresenting, B: ValueBinding>: MemberProtocol where P.Value == B.Value {
     let presentation: P
-    let binding: any ValueBinding<P.Value>
+    let binding: B
     
     func field<FB: FieldVisiting>(field: Metadata, id: AnyHashable, builder: FB) -> FB.Result {
         builder.visit(field: field, id: id, using: presentation, through: self.binding)
@@ -160,20 +186,37 @@ private struct FieldRecord<P: FieldPresenting>: MemberProtocol {
     }
 }
 
+private protocol FieldMemberBuilding {
+    func member(metadata: Metadata) -> FormModel.Member
+}
+
+private protocol GroupMemberBuilding {
+    func member(metadata: Metadata) -> FormModel.Member
+}
+
+extension FieldRecord: FieldMemberBuilding {
+    func member(metadata: Metadata) -> FormModel.Member {
+        .init(representation: .field(metadata, id: metadata.id, ui: self))
+    }
+}
+
+extension FieldRecord: GroupMemberBuilding where P: GroupPresenting {
+    func member(metadata: Metadata) -> FormModel.Member {
+        if let form = self.presentation.makeForm(metadata: metadata, binding: self.binding) {
+            return .init(representation: .group(form, id: metadata.id, ui: self))
+        } else {
+            return .init(representation: .field(metadata, id: metadata.id, ui: self))
+        }
+    }
+}
+
 private extension CustomFieldPresentable {
     static func build<Root>(from binding: some ValueBinding<Root>, through keyPath: PartialKeyPath<Root>, name: String?) -> FormModel.Member? {
         guard let keyPath = keyPath as? KeyPath<Root, Self> else { return nil }
         let wrappedValueBinding = binding.map(keyPath: keyPath)
         
-        if let presentation = self.preferredPresentation as? FieldPresentations.Group<Self> {
-            var model = FormModel(through: wrappedValueBinding)
-            model.metadata = model.metadata.with(externalName: name)
-            return .group(model, id: keyPath, ui: presentation.bundle(with: wrappedValueBinding))
-        } else {
-            let presentation = self.preferredPresentation
-            let metadata = Metadata(type: self, id: keyPath, externalName: name)
-            return .field(metadata, id: keyPath, ui: presentation.bundle(with: wrappedValueBinding))
-        }
+        return fieldRecord(presentation: self.preferredPresentation, binding: wrappedValueBinding)
+            .member(metadata: Metadata(type: self, id: keyPath, externalName: name))
     }
 }
 
@@ -184,15 +227,8 @@ private extension FieldProtocol {
         let value = fieldBinding.value
         let wrappedValueBinding = fieldBinding.map(keyPath: \.wrappedValue)
 
-        if let presentation = value.presentation as? FieldPresentations.Group<Self.WrappedValue> {
-            var model = FormModel(through: wrappedValueBinding)
-            model.metadata = model.metadata.with(externalName: name)
-            return .group(model, id: keyPath, ui: presentation.bundle(with: wrappedValueBinding))
-        } else {
-            let presentation = value.presentation
-            let metadata = value.metadata.with(id: keyPath, externalName: name)
-            return .field(metadata, id: keyPath, ui: presentation.bundle(with: wrappedValueBinding))
-        }
+        return fieldRecord(presentation: value.presentation, binding: wrappedValueBinding)
+            .member(metadata: value.metadata.with(id: keyPath, externalName: name))
     }
 }
 
@@ -200,8 +236,7 @@ private extension FieldProtocol {
 
 extension Metadata {
     fileprivate func matches(query: String) -> Bool {
-        return self.name?.localizedStandardContains(query) ?? false
-            || self.externalName?.localizedCaseInsensitiveContains(query) ?? false
+        return self.name?.description.localizedStandardContains(query) ?? false
     }
 }
 
@@ -227,11 +262,250 @@ private final class MirrorCache {
     }
 }
 
-// MARK: - Utility
+// MARK: - CustomFormPresentable + Utility
 
-fileprivate extension CustomFormPresentable {
-    @available(iOS 16, macOS 13, *)
-    static func dataModel(throughErased binding: any ValueBinding) -> FormModel? {
-        (binding as? any ValueBinding<Self>).flatMap(self.dataModel(through:))
+private protocol CustomFormTrampoline {
+    var form: FormModel { get }
+}
+
+private struct CustomFormPresentableDispatch<T, B: ValueBinding<T>> {
+    let type: T.Type
+    let binding: B
+}
+
+extension CustomFormPresentableDispatch: CustomFormTrampoline where T: CustomFormPresentable {
+    var form: FormModel {
+        self.type.formModel(for: self.binding)
+    }
+}
+
+// MARK: FieldsCollection
+
+extension FormModel {
+    private struct FieldsCollection<Visitor: FieldVisiting>: RandomAccessCollection {
+        public typealias Element = Visitor.Result
+        public typealias Index = Int
+        
+        private let visitor: Visitor
+        private let model: FormModel
+        
+        public var startIndex: Index {
+            return self.model.members.startIndex
+        }
+        
+        public var endIndex: Index {
+            return self.model.members.endIndex
+        }
+        
+        fileprivate init(model: FormModel, visitor: Visitor) {
+            self.visitor = visitor
+            self.model = model
+        }
+        
+        public func index(after i: Index) -> Index {
+            i + 1
+        }
+        
+        public subscript(index: Index) -> Visitor.Result {
+            switch self.model.members[index] {
+            case .group(let model, id: let id, ui: let trampoline):
+                return trampoline.group(group: model, id: id, builder: self.visitor)
+            case .field(let field, id: let id, ui: let trampoline):
+                return trampoline.field(field: field, id: id, builder: self.visitor)
+            }
+        }
+    }
+}
+
+// MARK: Prototype
+
+extension FormModel {
+    /// ``Builder`` result type
+    public struct Prototype {
+        fileprivate let members: [Member]
+        
+        fileprivate init(members: [Member]) {
+            self.members = members
+        }
+        
+        /// Create instace by inspecting the contents of provided binding
+        /// - Parameters:
+        ///   - binding: binding to a reflected value
+        ///   - options: form building options. See ``FormModel/Options`` for further explanation.
+        public init<S>(reflecting binding: some ValueBinding<S>, options: FormModel.Options = []) {
+            let members: [Member] = FormModel.cache[for: S.self].children.compactMap { child in
+                if let type = type(of: child.keyPath).valueType as? any FieldProtocol.Type {
+                    return type.build(from: binding, through: child.keyPath, name: child.label)
+                } else if
+                    !options.contains(.excludeUnmarked),
+                    let type = type(of: child.keyPath).valueType as? any CustomFieldPresentable.Type
+                {
+                    return type.build(from: binding, through: child.keyPath, name: child.label)
+                } else {
+                    return nil
+                }
+            }
+            
+            self.init(members: members)
+        }
+    }
+}
+
+// MARK: Member
+
+extension FormModel {
+    /// ``Builder`` element type
+    public struct Member {
+        fileprivate struct NoID: Hashable {
+            // nothing
+        }
+                
+        public static func group(
+            model: FormModel,
+            ui presentation: Presentations.Group<FormModel> = .section()
+        ) -> Self {
+            .group(
+                model: model,
+                ui: presentation,
+                binding: bind(value: model)
+            )
+        }
+        
+        public static func group<T>(
+            binding: any ValueBinding<T>,
+            ui presentation: some FieldPresenting<T>
+        ) -> Self {
+            .group(
+                model: FormModel(binding),
+                ui: presentation,
+                binding: binding
+            )
+        }
+        
+        public static func group(
+            name: Metadata.Text? = nil,
+            icon: Metadata.Image? = nil,
+            ui presentation: Presentations.Group<FormModel> = .section(),
+            @Builder _ builder: () -> Prototype
+        ) -> Self {
+            let model = FormModel(name: name, icon: icon, prototype: builder())
+            return .group(
+                model: model,
+                ui: presentation,
+                binding: bind(value: model)
+            )
+        }
+        
+        internal static func group<T>( // Designated
+            model: FormModel,
+            ui presentation: some FieldPresenting<T>,
+            binding: any ValueBinding<T>
+        ) -> Self {
+            .init(representation: .group(
+                model,
+                id: NoID(),
+                ui: fieldRecord(presentation: presentation, binding: binding)
+            ))
+        }
+        
+        public static func field<T>(
+            _ binding: any ValueBinding<T>,
+            name: Metadata.Text? = nil,
+            icon: Metadata.Image? = nil,
+            ui presentation: some FieldPresenting<T>
+        ) -> Self {
+            .field(
+                binding,
+                metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
+                ui: presentation
+            )
+        }
+        
+        public static func field<T>(
+            _ binding: any ValueBinding<T>,
+            name: Metadata.Text? = nil,
+            icon: Metadata.Image? = nil
+        ) -> Self where T: CustomFieldPresentable {
+            .field(
+                binding,
+                metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
+                ui: T.preferredPresentation
+            )
+        }
+        
+        public static func field<T>( // Designated
+            _ binding: any ValueBinding<T>,
+            metadata: Metadata,
+            ui presentation: any FieldPresenting<T>
+        ) -> Self {
+            .init(representation: .field(
+                metadata,
+                id: metadata.id,
+                ui: fieldRecord(presentation: presentation, binding: binding)
+            ))
+        }
+        
+        public static func field<T>(
+            binding: any ValueBinding<T>,
+            metadata: Metadata
+        ) -> Self where T: CustomFieldPresentable {
+            .field(
+                binding,
+                metadata: metadata,
+                ui: T.preferredPresentation
+            )
+        }
+
+        fileprivate private(set) var representation: FormModel.Record
+        
+        fileprivate init(representation: FormModel.Record) {
+            self.representation = representation
+        }
+        
+        fileprivate func with(id: AnyHashable) -> Self {
+            guard self.representation.id == NoID() as AnyHashable else { return self }
+            var result = self
+            result.representation.id = id
+            return result
+        }
+    }
+}
+
+// MARK: - Builder
+
+extension FormModel {
+    /// resultBuilder type used in building models
+    @resultBuilder public struct Builder {
+        public static func buildBlock() -> Prototype {
+            Prototype(members: [])
+        }
+        
+        public static func buildBlock(_ components: Prototype...) -> Prototype {
+            self.buildArray(components)
+        }
+        
+        public static func buildExpression(_ expression: Member) -> Prototype {
+            Prototype(members: [expression])
+        }
+        
+        public static func buildExpression(_ expression: ()) -> Prototype {
+            self.buildBlock()
+        }
+        
+        public static func buildOptional(_ component: Prototype?) -> Prototype {
+            self.buildBlock()
+        }
+        
+        public static func buildEither(first component: Prototype) -> Prototype {
+            component
+        }
+        
+        public static func buildEither(second component: Prototype) -> Prototype {
+            component
+        }
+        
+        public static func buildArray(_ components: [Prototype]) -> Prototype {
+            Prototype(members: components.flatMap(\.members))
+        }
     }
 }
