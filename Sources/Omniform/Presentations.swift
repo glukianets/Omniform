@@ -394,6 +394,27 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
     }
 }
 
+// MARK: - DisplayPresentation
+
+extension Presentations {
+    public enum Display: FieldPresenting {
+        public typealias Value = Bool
+        
+        public struct Format {
+            public internal(set) var format: AnyFormatStyle<Value, String>
+
+            @available(iOS 15.0, *)
+            public init<F>(
+                format: F
+            ) where F: FormatStyle, F.FormatInput == Value, F.FormatOutput == String {
+                self.format = .wrapping(format)
+            }
+        }
+        
+        case format(Format)
+    }
+}
+
 // MARK: - TogglePresentation
 
 extension Presentations {

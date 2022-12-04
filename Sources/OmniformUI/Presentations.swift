@@ -30,15 +30,21 @@ private extension Presentations {
 extension Presentations.Group: SwiftUIGroupPresenting {
     private struct NavigationLinkView: View {
         @Environment(\.omniformPresentation) var presentationKind
+        @State var isPresenting: Bool = false
         let model: FormModel
         
         var body: some View {
             if self.presentationKind != .standalone {
                 NavigationLink(destination: DynamicView(OmniformView(model: model))) {
-                    MetadataLabel(model.metadata, value: .constant(model))
+                    MetadataDisplay(model.metadata, value: .constant(model))
                 }
             } else {
-                SectionView(model: self.model, caption: nil)
+                Button(action: { self.isPresenting.toggle() }) {
+                    MetadataDisplay(model.metadata, value: .constant(model))
+                        .popover(isPresented: self.$isPresenting) {
+                            OmniformView(model: model)
+                        }
+                }
             }
         }
     }

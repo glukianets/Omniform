@@ -100,6 +100,16 @@ public protocol CustomFieldPresentable {
     static var preferredPresentation: PreferredPresentation { get }
 }
 
+/// A type that is presentable inside ``FormModel`` as formatted display
+@available(iOS 15, macOS 13, *)
+public protocol CustomFieldFormattable {
+    associatedtype FormatStyle: Foundation.FormatStyle
+    where FormatStyle.FormatInput == Self, FormatStyle.FormatOutput == String
+    
+    /// Format used when presenting in formatted context, like .display() presentation
+    static var preferredFormat: FormatStyle { get }
+}
+
 extension Bool: CustomFieldPresentable {
     public static var preferredPresentation: some FieldPresenting<Self> {
         .toggle
