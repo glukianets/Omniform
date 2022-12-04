@@ -375,12 +375,12 @@ extension AnyFormatStyle {
 }
 
 extension AnyFormatStyle where FormatOutput == String {
-    public static var `default`: AnyFormatStyle<FormatInput, String> {
+    public static var `default`: AnyFormatStyle<FormatInput, String>? {
         let dd = FormatDispatch<FormatInput>()
         let format = (dd as? FormatThroughCustomFieldFormattable)?.preferredFormat
             ?? (dd as? FormatThroughCustomStringPresentable)?.descriptionFormat
 
-        return format as! AnyFormatStyle<FormatInput, String>? ?? .dynamic { _ in "" }
+        return format as! AnyFormatStyle<FormatInput, String>?
     }
 }
 
@@ -391,9 +391,9 @@ private protocol FormatThroughCustomFieldFormattable {
 }
 
 @available(iOS 15, *)
-extension FormatDispatch: FormatThroughCustomFieldFormattable where Value: CustomFieldFormattable {
+extension FormatDispatch: FormatThroughCustomFieldFormattable where Value: _CustomFieldFormattable {
     var preferredFormat: Any {
-        AnyFormatStyle<Value, String>.wrapping(Value.preferredFormat)
+        AnyFormatStyle<Value, String>.wrapping(Value._preferredFormat)
     }
 }
 

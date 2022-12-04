@@ -40,8 +40,10 @@ extension Presentations {
         case section(Section)
         
         public struct Screen: Equatable {
-            public init() {
-                // nothing
+            public let format: AnyFormatStyle<Value, String>?
+
+            public init(format: AnyFormatStyle<Value, String>? = .default) {
+                self.format = format
             }
         }
         
@@ -135,8 +137,8 @@ extension FieldPresenting {
     }
 
     @inlinable
-    public static func screen<T>() -> Self where Self == Presentations.Group<T> {
-        .screen(.init())
+    public static func screen<T>(format: AnyFormatStyle<T, String>? = nil) -> Self where Self == Presentations.Group<T> {
+        .screen(.init(format: format))
     }
 
     @inlinable
@@ -448,8 +450,10 @@ extension Presentations {
             public static var auto: Self { Self(representation: .auto) }
             public static var segments: Self { Self(representation: .segments) }
             public static var wheel: Self { Self(representation: .wheel) }
-            public static var selection: Self { Self(representation: .selection(.screen())) }
-            public static func selection(_ presentation: Group<Value> = .screen()) -> Self {
+            public static var selection: Self {
+                Self(representation: .selection(.screen(format: .default ?? .dynamic(format: String.init(optionalyDescribing:)))))
+            }
+            public static func selection(_ presentation: Group<Value>) -> Self {
                 Self(representation: .selection(presentation))
             }
 

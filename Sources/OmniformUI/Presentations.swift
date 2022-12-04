@@ -9,7 +9,7 @@ public protocol SwiftUIFieldPresenting<Value>: FieldPresenting {
 }
 
 public protocol SwiftUIGroupPresenting<Value>: GroupPresenting {
-    func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R]
+    func body<R>(for model: FormModel, binding: some ValueBinding<Value>, builder: some FieldVisiting<R>) -> [R]
 }
 
 // MARK: - Group
@@ -28,19 +28,21 @@ private extension Presentations {
 }
 
 extension Presentations.Group: SwiftUIGroupPresenting {
-    private struct NavigationLinkView: View {
+    private struct NavigationLinkView<Value>: View {
         @Environment(\.omniformPresentation) var presentationKind
         @State var isPresenting: Bool = false
         let model: FormModel
-        
+        @Binding var value: Value
+        var format: AnyFormatStyle<Value, String>?
+
         var body: some View {
             if self.presentationKind != .standalone {
                 NavigationLink(destination: DynamicView(OmniformView(model: model))) {
-                    MetadataDisplay(model.metadata, value: .constant(model))
+                    MetadataDisplay(model.metadata, value: self.$value, format: self.format)
                 }
             } else {
                 Button(action: { self.isPresenting.toggle() }) {
-                    MetadataDisplay(model.metadata, value: .constant(model))
+                    MetadataDisplay(model.metadata, value: self.$value, format: self.format)
                         .popover(isPresented: self.$isPresenting) {
                             OmniformView(model: model)
                         }
@@ -52,12 +54,13 @@ extension Presentations.Group: SwiftUIGroupPresenting {
     private struct SectionView: View {
         let model: FormModel
         let caption: Metadata.Text?
-        
+        @Binding var value: Value
+
         var body: some View {
             SwiftUI.Section {
                 OmniformContentView(model: self.model)
             } header: {
-                MetadataLabel(self.model.metadata, value: .constant(model))
+                MetadataLabel(self.model.metadata, value: self.$value)
             } footer: {
                 if let caption = self.caption {
                     MetadataTextView(caption)
@@ -68,17 +71,17 @@ extension Presentations.Group: SwiftUIGroupPresenting {
         }
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
-        let presentation: Presentations.GroupPresentationTrampoline<FormModel>
+    public func body<R>(for model: FormModel, binding: some ValueBinding<Value>, builder: some FieldVisiting<R>) -> [R] {
+        let presentation: Presentations.GroupPresentationTrampoline<Value>
         
         switch self {
         case .section(let section):
             presentation = .init { _ in
-                SectionView(model: model, caption: section.caption).erased
+                SectionView(model: model, caption: section.caption, value: binding.forSwiftUI).erased
             }
-        case .screen:
+        case .screen(let content):
             presentation = .init { _ in
-                NavigationLinkView(model: model).erased
+                NavigationLinkView(model: model, value: binding.forSwiftUI, format: content.format).erased
             }
         case .inline:
             presentation = .init { _ in
@@ -86,13 +89,13 @@ extension Presentations.Group: SwiftUIGroupPresenting {
             }
         }
 
-        return [builder.visit(field: model.metadata, id: id, using: presentation, through: bind(value: model))]
+        return [builder.visit(field: model.metadata, id: model.metadata.id, using: presentation, through: binding)]
     }
 }
 
 // MARK: - Grouped
 
-extension Presentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting {
+extension Presentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting where Group: SwiftUIGroupPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         if #available(iOS 16.0.0, *) {
             guard let presentation = self.fieldPresentation as? any SwiftUIFieldPresenting<Value> else {
@@ -106,12 +109,8 @@ extension Presentations.Grouped: SwiftUIGroupPresenting, SwiftUIFieldPresenting 
     
     public typealias Body = AnyView
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
-        if let presentation = self.groupPresentation as? any SwiftUIGroupPresenting {
-            return presentation.body(for: model, id: id, builder: builder)
-        } else {
-            return []
-        }
+    public func body<R>(for model: FormModel, binding: some ValueBinding<Value>, builder: some FieldVisiting<R>) -> [R] {
+        self.groupPresentation?.body(for: model, binding: binding, builder: builder) ?? []
     }
 }
 
@@ -332,7 +331,7 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
         return Content(metadata: field, binding: binding.forSwiftUI, presentation: self).erased
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
+    public func body<R>(for model: FormModel, binding: some ValueBinding<Value>, builder: some FieldVisiting<R>) -> [R] {
         let style: Style
         switch self {
         case .plain(let content):
@@ -347,15 +346,12 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
         case .inline:
             fatalError("unreachable")
         case .screen:
-            return Presentations.Group<Value>.screen().body(for: model, id: id, builder: builder)
+            return Presentations.Group<Value>.screen().body(for: model, binding: binding, builder: builder)
         case .section:
-            return Presentations.Group<Value>.section().body(for: model, id: id, builder: builder)
+            return Presentations.Group<Value>.section().body(for: model, binding: binding, builder: builder)
         case .custom(let presentation):
-            if let swiftUIPresenting = presentation as? (any SwiftUIGroupPresenting) {
-                return swiftUIPresenting.body(for: model, id: id, builder: builder)
-            } else {
-                return [] // TODO: Warn?
-            }
+            guard let dd = dispatch(presentation: presentation, binding: binding) as? GroupViewBuilding else { return [] }
+            return dd.build(model: model, id: model.metadata.id, builder: builder)
         }
     }
 }
@@ -497,19 +493,15 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
         return PickerView(presentation: self, field: field, binding: swiftUIBinding, canDeselect: canDeselect).erased
     }
     
-    public func body<R>(for model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
-        let binding = bind { () -> Value in
-            preconditionFailure("Faux binding for type \(Value.self) shouldn't be called")
-        }
-        
+    public func body<R>(for model: FormModel, binding: some ValueBinding<Value>, builder: some FieldVisiting<R>) -> [R] {
         if
             case .selection(let content) = self,
             let presentation = content.presentation,
             let dispatch = dispatch(presentation: presentation, binding: binding) as? GroupViewBuilding
         {
-            return dispatch.build(model: model, id: id, builder: builder)
+            return dispatch.build(model: model, id: model.metadata.id, builder: builder)
         } else {
-            return Presentations.Group<Value>.inline().body(for: model, id: id, builder: builder)
+            return Presentations.Group<Value>.inline().body(for: model, binding: binding, builder: builder)
         }
     }
 }

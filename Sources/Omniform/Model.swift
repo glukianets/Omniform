@@ -177,6 +177,12 @@ extension FormModel: CustomFormPresentable {
     }
 }
 
+extension FormModel: _CustomFieldFormattable {
+    public static var _preferredFormat: AnyFormatStyle<Self, String> {
+        .dynamic { _ in "" }
+    }
+}
+
 extension FormModel: CustomDebugStringConvertible {
     public var debugDescription: String {
         func describe(metadata: Metadata) -> String? {

@@ -71,9 +71,9 @@ internal struct MetadataDisplay<Value>: View {
     @Binding private var value: Value
     private let text: Metadata.Text?
     private let image: Metadata.Image?
-    private let format: AnyFormatStyle<Value, String>
+    private let format: AnyFormatStyle<Value, String>?
     
-    public init(_ metadata: Metadata, value: Binding<Value>, format: AnyFormatStyle<Value, String> = .default) {
+    public init(_ metadata: Metadata, value: Binding<Value>, format: AnyFormatStyle<Value, String>? = .default) {
         self.init(text: metadata.name, image: metadata.icon, value: value, format: format)
     }
 
@@ -81,7 +81,7 @@ internal struct MetadataDisplay<Value>: View {
         text: Metadata.Text?,
         image: Metadata.Image?,
         value: Binding<Value>,
-        format: AnyFormatStyle<Value, String> = .default
+        format: AnyFormatStyle<Value, String>? = .default
     ) {
         self._value = value
         self.text = text
@@ -96,8 +96,8 @@ internal struct MetadataDisplay<Value>: View {
             Group {
                 if let text = (self as? FormatTextBuilding)?.textView {
                     text
-                } else {
-                    Text(self.format.format(self.value))
+                } else if let format = self.format {
+                    Text(format.format(self.value))
                 }
             }
             .foregroundColor(.secondary)
@@ -106,12 +106,12 @@ internal struct MetadataDisplay<Value>: View {
 }
 
 private protocol FormatTextBuilding {
-    var textView: Text { get }
+    var textView: Text? { get }
 }
 
 @available(iOS 15, macOS 13, *)
 extension MetadataDisplay: FormatTextBuilding where Value: Equatable {
-    var textView: Text {
-        Text(self.value, format: self.format)
+    var textView: Text? {
+        self.format.map { Text(self.value, format: $0) }
     }
 }
