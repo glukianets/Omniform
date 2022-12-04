@@ -391,9 +391,9 @@ private protocol FormatThroughCustomFieldFormattable {
 }
 
 @available(iOS 15, *)
-extension FormatDispatch: FormatThroughCustomFieldFormattable where Value: _CustomFieldFormattable {
+extension FormatDispatch: FormatThroughCustomFieldFormattable where Value: CustomFieldFormattable {
     var preferredFormat: Any {
-        AnyFormatStyle<Value, String>.wrapping(Value._preferredFormat)
+        AnyFormatStyle<Value, String>.wrapping(Value.preferredFormatStyle)
     }
 }
 

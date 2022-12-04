@@ -144,6 +144,7 @@ public extension ValueBinding {
 // MARK: - String
 
 internal extension String {
+    @usableFromInline
     init<Subject>(optionalyDescribing value: Subject) {
         self = (value as? Any?)?.flatMap { String(describing: $0) } ?? ""
     }

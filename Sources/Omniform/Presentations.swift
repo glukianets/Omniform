@@ -399,21 +399,64 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
 // MARK: - DisplayPresentation
 
 extension Presentations {
-    public enum Display: FieldPresenting {
-        public typealias Value = Bool
+    public enum TextDisplay<Value>: FieldPresenting {
+        public enum Style {
+            case brief, elaborate
+        }
         
-        public struct Format {
-            public internal(set) var format: AnyFormatStyle<Value, String>
+        public struct Brief {
+            public let format: AnyFormatStyle<Value, String>
 
-            @available(iOS 15.0, *)
-            public init<F>(
-                format: F
-            ) where F: FormatStyle, F.FormatInput == Value, F.FormatOutput == String {
-                self.format = .wrapping(format)
+            public init(format: AnyFormatStyle<Value, String>) {
+                self.format = format
             }
         }
         
-        case format(Format)
+        public struct Elaborate {
+            public let format: AnyFormatStyle<Value, String>
+
+            public init(format: AnyFormatStyle<Value, String>) {
+                self.format = format
+            }
+        }
+        
+        case brief(Brief)
+        case elaborate(Elaborate)
+    }
+}
+
+extension FieldPresenting {
+    @inlinable
+    @available(iOS 15.0, *)
+    public static func display<F>(
+        format: F,
+        style: Self.Style = .brief
+    ) -> Self where
+        F: FormatStyle,
+        F.FormatOutput == String,
+        Self == Presentations.TextDisplay<F.FormatInput>
+    {
+        switch style {
+        case .brief:
+            return .brief(.init(format: .wrapping(format)))
+        case .elaborate:
+            return .elaborate(.init(format: .wrapping(format)))
+        }
+    }
+    
+    @inlinable
+    public static func display<Value>(
+        style: Self.Style = .brief
+    ) -> Self where
+        Self == Presentations.TextDisplay<Value>
+    {
+        let format: AnyFormatStyle<Value, String> = .default ?? .dynamic(format: String.init(describing:))
+        switch style {
+        case .brief:
+            return .brief(.init(format: format))
+        case .elaborate:
+            return .elaborate(.init(format: format))
+        }
     }
 }
 

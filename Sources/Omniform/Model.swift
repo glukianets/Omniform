@@ -177,9 +177,12 @@ extension FormModel: CustomFormPresentable {
     }
 }
 
-extension FormModel: _CustomFieldFormattable {
-    public static var _preferredFormat: AnyFormatStyle<Self, String> {
-        .dynamic { _ in "" }
+extension FormModel: CustomFieldFormattable {
+    public typealias FormatStyle = AnyFormatStyle<Self, String>
+    
+    @available(iOS 15.0, *)
+    public static var preferredFormatStyle: AnyFormatStyle<FormModel, String> {
+        AnyFormatStyle<Self, String>.dynamic { _ in "" }
     }
 }
 

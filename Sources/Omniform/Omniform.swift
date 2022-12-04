@@ -102,21 +102,12 @@ public protocol CustomFieldPresentable {
 
 /// A type that is presentable inside ``FormModel`` as formatted display
 @available(iOS 15, macOS 13, *)
-public protocol CustomFieldFormattable: _CustomFieldFormattable {
+public protocol CustomFieldFormattable {
     associatedtype FormatStyle: Foundation.FormatStyle
     where FormatStyle.FormatInput == Self, FormatStyle.FormatOutput == String
     
     /// Format used when presenting in formatted context, like .display() presentation
     static var preferredFormatStyle: FormatStyle { get }
-}
-
-public protocol _CustomFieldFormattable {
-    static var _preferredFormat: AnyFormatStyle<Self, String> { get }
-}
-
-@available(iOS 15, macOS 13, *)
-extension _CustomFieldFormattable where Self: CustomFieldFormattable {
-    var _preferredFormat: AnyFormatStyle<Self, String> { .wrapping(Self.preferredFormatStyle) }
 }
 
 extension Bool: CustomFieldPresentable {
@@ -206,6 +197,12 @@ extension UInt32: CustomFieldPresentable {
 extension UInt64: CustomFieldPresentable {
     public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
+    }
+}
+
+extension Date: CustomFieldPresentable {
+    public static var preferredPresentation: some FieldPresenting<Self> {
+        .picker()
     }
 }
 

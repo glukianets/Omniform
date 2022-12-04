@@ -92,15 +92,30 @@ internal struct MetadataDisplay<Value>: View {
     public var body: some View {
         HStack {
             MetadataLabel(text: self.text, image: self.image)
-            Spacer()
-            Group {
-                if let text = (self as? FormatTextBuilding)?.textView {
-                    text
-                } else if let format = self.format {
-                    Text(format.format(self.value))
-                }
+            if let format = self.format {
+                Spacer()
+                Formatted(value: self.$value, format: format)
+                    .lineLimit(1)
+                    .foregroundColor(.secondary)
             }
-            .foregroundColor(.secondary)
+        }
+    }
+}
+
+internal struct Formatted<Value>: View {
+    @Binding private var value: Value
+    private let format: AnyFormatStyle<Value, String>
+
+    public init(value: Binding<Value>, format: AnyFormatStyle<Value, String>) {
+        self._value = value
+        self.format = format
+    }
+
+    public var body: Text {
+        if let text = (self as? FormatTextBuilding)?.textView {
+            return text
+        } else {
+            return Text(self.format.format(self.value))
         }
     }
 }
@@ -110,8 +125,8 @@ private protocol FormatTextBuilding {
 }
 
 @available(iOS 15, macOS 13, *)
-extension MetadataDisplay: FormatTextBuilding where Value: Equatable {
+extension Formatted: FormatTextBuilding where Value: Equatable {
     var textView: Text? {
-        self.format.map { Text(self.value, format: $0) }
+        Text(self.value, format: self.format)
     }
 }

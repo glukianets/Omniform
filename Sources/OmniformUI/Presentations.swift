@@ -270,12 +270,12 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
                         self.state.text = stringBinding.value
                     }
                     .onDisappear {
-                        self.state.text = stringBinding.value
+                        stringBinding.value = self.state.text
                     }
-                    .onReceive(self.state.$text.debounce(for: .seconds(2), scheduler: RunLoop.main)) { newValue in
+                    .onReceive(self.state.$text.throttle(for: .seconds(0.5), scheduler: RunLoop.main, latest: true)) { newValue in
                         stringBinding.value = newValue
                     }
-
+                    
                 case .secure(let content):
                     let stringBinding = content.lower(binding: self.binding).forSwiftUI
 
@@ -295,9 +295,9 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
                         self.state.text = stringBinding.value
                     }
                     .onDisappear {
-                        self.state.text = stringBinding.value
+                        stringBinding.value = self.state.text
                     }
-                    .onReceive(self.state.$text.debounce(for: .seconds(2), scheduler: RunLoop.main)) { newValue in
+                    .onReceive(self.state.$text.throttle(for: .seconds(0.5), scheduler: RunLoop.main, latest: true)) { newValue in
                         stringBinding.value = newValue
                     }
 
@@ -333,26 +333,54 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
     
     public func body<R>(for model: FormModel, binding: some ValueBinding<Value>, builder: some FieldVisiting<R>) -> [R] {
         let style: Style
+        let format: AnyFormatStyle<Value, String>?
         switch self {
         case .plain(let content):
             style = content.style
+            format = .default
         case .secure(let content):
             style = content.style
+            let defaultFormat: AnyFormatStyle<Value, String> = .default ?? .dynamic { _ in "" }
+            format = .dynamic { defaultFormat.format($0).isEmpty ? "" : "⏺\u{fe0e}" }
         case .format(let content):
             style = content.style
+            format = .default
         }
         
         switch style {
         case .inline:
             fatalError("unreachable")
         case .screen:
-            return Presentations.Group<Value>.screen().body(for: model, binding: binding, builder: builder)
+            return Presentations.Group<Value>.screen(format: format).body(for: model, binding: binding, builder: builder)
         case .section:
             return Presentations.Group<Value>.section().body(for: model, binding: binding, builder: builder)
         case .custom(let presentation):
             guard let dd = dispatch(presentation: presentation, binding: binding) as? GroupViewBuilding else { return [] }
             return dd.build(model: model, id: model.metadata.id, builder: builder)
         }
+    }
+}
+
+// MARK: - TextDisplay
+
+extension Presentations.TextDisplay: SwiftUIFieldPresenting {
+    public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+        Group {
+            switch self {
+            case .brief(let content):
+                MetadataDisplay(field, value: binding.forSwiftUI, format: content.format)
+            case .elaborate(let content):
+                let content = Formatted(value: binding.forSwiftUI, format: content.format)
+                    .lineLimit(nil)
+                
+                if #available(iOS 15.0, *) {
+                    content
+                        .textSelection(.enabled)
+                } else {
+                    content
+                }
+            }
+        }.erased
     }
 }
 
