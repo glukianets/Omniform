@@ -261,7 +261,7 @@ extension Dispatch: FieldViewBuilding where P: SwiftUIFieldPresenting {
 
 extension Dispatch: GroupViewBuilding where P: SwiftUIGroupPresenting {
     func build<R>(model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
-        return self.presentation.body(for: model, id: id, builder: builder)
+        return self.presentation.body(for: model, binding: self.binding, builder: builder)
     }
 }
 

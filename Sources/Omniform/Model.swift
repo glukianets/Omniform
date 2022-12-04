@@ -177,8 +177,17 @@ extension FormModel: CustomFormPresentable {
     }
 }
 
-extension FormModel: CustomStringConvertible {
-    public var description: String {
+extension FormModel: CustomFieldFormattable {
+    public typealias FormatStyle = AnyFormatStyle<Self, String>
+    
+    @available(iOS 15.0, *)
+    public static var preferredFormatStyle: AnyFormatStyle<FormModel, String> {
+        AnyFormatStyle<Self, String>.dynamic { _ in "" }
+    }
+}
+
+extension FormModel: CustomDebugStringConvertible {
+    public var debugDescription: String {
         func describe(metadata: Metadata) -> String? {
             let icon: String? = metadata.icon.map {
                 switch $0 {

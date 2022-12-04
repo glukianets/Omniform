@@ -40,8 +40,10 @@ extension Presentations {
         case section(Section)
         
         public struct Screen: Equatable {
-            public init() {
-                // nothing
+            public let format: AnyFormatStyle<Value, String>?
+
+            public init(format: AnyFormatStyle<Value, String>? = .default) {
+                self.format = format
             }
         }
         
@@ -135,8 +137,8 @@ extension FieldPresenting {
     }
 
     @inlinable
-    public static func screen<T>() -> Self where Self == Presentations.Group<T> {
-        .screen(.init())
+    public static func screen<T>(format: AnyFormatStyle<T, String>? = nil) -> Self where Self == Presentations.Group<T> {
+        .screen(.init(format: format))
     }
 
     @inlinable
@@ -394,6 +396,70 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
     }
 }
 
+// MARK: - DisplayPresentation
+
+extension Presentations {
+    public enum TextDisplay<Value>: FieldPresenting {
+        public enum Style {
+            case brief, elaborate
+        }
+        
+        public struct Brief {
+            public let format: AnyFormatStyle<Value, String>
+
+            public init(format: AnyFormatStyle<Value, String>) {
+                self.format = format
+            }
+        }
+        
+        public struct Elaborate {
+            public let format: AnyFormatStyle<Value, String>
+
+            public init(format: AnyFormatStyle<Value, String>) {
+                self.format = format
+            }
+        }
+        
+        case brief(Brief)
+        case elaborate(Elaborate)
+    }
+}
+
+extension FieldPresenting {
+    @inlinable
+    @available(iOS 15.0, *)
+    public static func display<F>(
+        format: F,
+        style: Self.Style = .brief
+    ) -> Self where
+        F: FormatStyle,
+        F.FormatOutput == String,
+        Self == Presentations.TextDisplay<F.FormatInput>
+    {
+        switch style {
+        case .brief:
+            return .brief(.init(format: .wrapping(format)))
+        case .elaborate:
+            return .elaborate(.init(format: .wrapping(format)))
+        }
+    }
+    
+    @inlinable
+    public static func display<Value>(
+        style: Self.Style = .brief
+    ) -> Self where
+        Self == Presentations.TextDisplay<Value>
+    {
+        let format: AnyFormatStyle<Value, String> = .default ?? .dynamic(format: String.init(describing:))
+        switch style {
+        case .brief:
+            return .brief(.init(format: format))
+        case .elaborate:
+            return .elaborate(.init(format: format))
+        }
+    }
+}
+
 // MARK: - TogglePresentation
 
 extension Presentations {
@@ -427,8 +493,10 @@ extension Presentations {
             public static var auto: Self { Self(representation: .auto) }
             public static var segments: Self { Self(representation: .segments) }
             public static var wheel: Self { Self(representation: .wheel) }
-            public static var selection: Self { Self(representation: .selection(.screen())) }
-            public static func selection(_ presentation: Group<Value> = .screen()) -> Self {
+            public static var selection: Self {
+                Self(representation: .selection(.screen(format: .default ?? .dynamic(format: String.init(optionalyDescribing:)))))
+            }
+            public static func selection(_ presentation: Group<Value>) -> Self {
                 Self(representation: .selection(presentation))
             }
 

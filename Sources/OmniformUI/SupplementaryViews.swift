@@ -39,7 +39,7 @@ internal struct MetadataLabel<Value>: View {
     private let text: Metadata.Text?
     private let image: Metadata.Image?
     
-    public init(_ metadata: Metadata, value: Binding<Value>) {
+    public init(_ metadata: Metadata, value: Binding<Value> = .constant(())) {
         self.init(text: metadata.name, image: metadata.icon, value: value)
     }
 
@@ -63,5 +63,70 @@ internal struct MetadataLabel<Value>: View {
                 EmptyView()
             }
         }
+    }
+}
+
+internal struct MetadataDisplay<Value>: View {
+    @Environment(\.omniformResourceResolver) private var resourceResolver
+    @Binding private var value: Value
+    private let text: Metadata.Text?
+    private let image: Metadata.Image?
+    private let format: AnyFormatStyle<Value, String>?
+    
+    public init(_ metadata: Metadata, value: Binding<Value>, format: AnyFormatStyle<Value, String>? = .default) {
+        self.init(text: metadata.name, image: metadata.icon, value: value, format: format)
+    }
+
+    public init(
+        text: Metadata.Text?,
+        image: Metadata.Image?,
+        value: Binding<Value>,
+        format: AnyFormatStyle<Value, String>? = .default
+    ) {
+        self._value = value
+        self.text = text
+        self.image = image
+        self.format = format
+    }
+    
+    public var body: some View {
+        HStack {
+            MetadataLabel(text: self.text, image: self.image)
+            if let format = self.format {
+                Spacer()
+                Formatted(value: self.$value, format: format)
+                    .lineLimit(1)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
+internal struct Formatted<Value>: View {
+    @Binding private var value: Value
+    private let format: AnyFormatStyle<Value, String>
+
+    public init(value: Binding<Value>, format: AnyFormatStyle<Value, String>) {
+        self._value = value
+        self.format = format
+    }
+
+    public var body: Text {
+        if let text = (self as? FormatTextBuilding)?.textView {
+            return text
+        } else {
+            return Text(self.format.format(self.value))
+        }
+    }
+}
+
+private protocol FormatTextBuilding {
+    var textView: Text? { get }
+}
+
+@available(iOS 15, macOS 13, *)
+extension Formatted: FormatTextBuilding where Value: Equatable {
+    var textView: Text? {
+        Text(self.value, format: self.format)
     }
 }

@@ -7,7 +7,15 @@ public enum Samples {
         struct Basic {
             var toggle: Bool = true
             
-            var text: String = ""
+            var input: String = ""
+            
+            @Field(ui: .display())
+            var label: String = "Hello, world!"
+            
+            @Field(ui: .display(style: .elaborate).grouping(inside: .screen(format: .default)))
+            var text: String = """
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam ornare justo dui, et consequat lectus ultricies ac. Fusce aliquet convallis mattis. Aliquam erat volutpat. Sed quis sem convallis, eleifend ipsum vitae, semper sapien. Proin bibendum sapien vel orci porta placerat. In vel dui sit amet dolor gravida facilisis. Aenean porta aliquam nulla ut dignissim. Ut tristique gravida nunc sed suscipit. Phasellus convallis arcu vitae augue tempus viverra. Sed eu convallis eros. Suspendisse mollis orci quis convallis feugiat. Phasellus mattis condimentum sollicitudin. Etiam quam neque, malesuada quis felis vitae, semper semper ligula. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Sed sollicitudin est arcu, vitae fermentum ligula dapibus at.
+            """
             
             @Field(ui: .button())
             var button: () -> Void = {}
