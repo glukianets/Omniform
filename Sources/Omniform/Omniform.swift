@@ -34,7 +34,7 @@ public protocol FieldVisiting<Result> {
     func visit<Value>(
         group: FormModel,
         id: AnyHashable,
-        using presentation: some FieldPresenting<Value>,
+        using presentation: some GroupPresenting<Value>,
         through binding: some ValueBinding<Value>
     ) -> Result
 }
@@ -98,6 +98,16 @@ public protocol CustomFieldPresentable {
     
     /// Presentation that is used when none other is specified
     static var preferredPresentation: PreferredPresentation { get }
+}
+
+/// A type that is presentable inside ``FormModel`` as formatted display
+@available(iOS 15, macOS 13, *)
+public protocol CustomFieldFormattable {
+    associatedtype FormatStyle: Foundation.FormatStyle
+    where FormatStyle.FormatInput == Self, FormatStyle.FormatOutput == String
+    
+    /// Format used when presenting in formatted context, like .display() presentation
+    static var preferredFormatStyle: FormatStyle { get }
 }
 
 extension Bool: CustomFieldPresentable {
@@ -187,6 +197,12 @@ extension UInt32: CustomFieldPresentable {
 extension UInt64: CustomFieldPresentable {
     public static var preferredPresentation: some FieldPresenting<Self> {
         .input()
+    }
+}
+
+extension Date: CustomFieldPresentable {
+    public static var preferredPresentation: some FieldPresenting<Self> {
+        .picker()
     }
 }
 

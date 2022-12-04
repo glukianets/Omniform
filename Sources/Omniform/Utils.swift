@@ -20,6 +20,12 @@ internal extension StringProtocol {
     func dropPrefix(_ prefix: String) -> Self.SubSequence {
         self.hasPrefix(prefix) ? self.dropFirst(prefix.count) : self[...]
     }
+    
+    func indent(_ indent: String) -> String {
+        self.components(separatedBy: .newlines)
+            .map { indent + $0 }
+            .joined(separator: "\n")
+    }
 }
 
 // MARK: - Sequence
@@ -135,3 +141,11 @@ public extension ValueBinding {
     }
 }
 
+// MARK: - String
+
+internal extension String {
+    @usableFromInline
+    init<Subject>(optionalyDescribing value: Subject) {
+        self = (value as? Any?)?.flatMap { String(describing: $0) } ?? ""
+    }
+}

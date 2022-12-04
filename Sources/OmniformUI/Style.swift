@@ -240,7 +240,7 @@ internal protocol FieldViewBuilding {
 }
 
 internal protocol GroupViewBuilding {
-    func build<R>(model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R
+    func build<R>(model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R]
 }
 
 // TODO: Replace with simple cast for iOS >= 16 & macOS >= 13
@@ -260,8 +260,8 @@ extension Dispatch: FieldViewBuilding where P: SwiftUIFieldPresenting {
 }
 
 extension Dispatch: GroupViewBuilding where P: SwiftUIGroupPresenting {
-    func build<R>(model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> R {
-        return self.presentation.body(for: model, id: id, builder: builder)
+    func build<R>(model: FormModel, id: AnyHashable, builder: some FieldVisiting<R>) -> [R] {
+        return self.presentation.body(for: model, binding: self.binding, builder: builder)
     }
 }
 
@@ -293,7 +293,7 @@ internal struct SwiftUIFieldVisitor<Style: OmniformStyle>: FieldVisiting {
         through binding: some ValueBinding<Value>
     ) -> ViewElement {
         if let dd = Dispatch(presentation: presentation, binding: binding) as? GroupViewBuilding {
-            return dd.build(model: model, id: id, builder: self)
+            return (id, ForEach(dd.build(model: model, id: id, builder: self), id: \.0) { $0.1 }.erased)
         } else {
             return (id, EmptyView().erased)
         }
