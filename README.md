@@ -55,7 +55,7 @@ public struct Tutorial {
 
 It produces UI like this:
 
-![ui example](https://github.com/glukianets/omniform/blob/master/README.png?raw=true#gh-light-mode-only)
+![ui example](https://github.com/glukianets/omniform/blob/master/README~light.png?raw=true#gh-light-mode-only)
 ![ui example](https://github.com/glukianets/omniform/blob/master/README~dark.png?raw=true#gh-dark-mode-only)
 
 For further guidance please consult built-in documentation
