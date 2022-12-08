@@ -5,19 +5,54 @@ import SwiftUI
 
 public struct OmniformPresentation: Equatable {
     internal enum PresentationKind: Equatable {
-        case standalone
-        case navigation(isRoot: Bool = false)
+        case embed
+        case stack(isRoot: Bool = false)
+        case split(isMaster: Bool = false)
     }
     
-    public static var standalone: Self = Self(kind: .standalone)
-    public static var navigation: Self = Self(kind: .navigation())
-    public static func navigation(fromRoot: Bool) -> Self { .init(kind: .navigation(isRoot: fromRoot)) }
-
+    public static var embed: Self = Self(kind: .embed)
+    public static var stack: Self = Self(kind: .stack(isRoot: true))
+    public static var split: Self = Self(kind: .split(isMaster: true))
+    
+    internal static func stack(root: Bool) -> Self { Self(kind: .stack(isRoot: root)) }
+    internal static func split(master: Bool) -> Self { Self(kind: .split(isMaster: master)) }
+    
     internal let kind: PresentationKind
+    
+    public static func ==(_ lhs: Self, _ rhs: Self) -> Bool {
+        switch (lhs.kind, rhs.kind) {
+        case (.embed, .embed), (.stack, .stack), (.split, .split):
+            return true
+        default:
+            return false
+        }
+    }
+    
+    internal var derived: Self {
+        switch self.kind {
+        case .embed:
+            return .embed
+        case .stack:
+            return .stack(root: false)
+        case .split:
+            return .split(master: false)
+        }
+    }
+    
+    internal var isDerived: Bool {
+        switch self.kind {
+        case .embed:
+            return false
+        case .stack(let isRoot):
+            return !isRoot
+        case .split(let isMaster):
+            return !isMaster
+        }
+    }
 }
 
 private struct OmniformPresentationEnvironmentKey: EnvironmentKey {
-    static let defaultValue: OmniformPresentation = .standalone
+    static let defaultValue: OmniformPresentation = .embed
 }
 
 internal extension EnvironmentValues {
@@ -255,7 +290,8 @@ internal func dispatch<T>(presentation: some FieldPresenting<T>, binding: some V
 
 extension Dispatch: FieldViewBuilding where P: SwiftUIFieldPresenting {
     func build(field: Metadata, id: AnyHashable, style: some OmniformStyle) -> ViewElement {
-        return (id, self.presentation.body(for: field, binding: self.binding, modifier: style.fieldModifier).erased)
+        let modifier = style.fieldModifier
+        return (id, self.presentation.body(for: field, binding: binding).modifier(modifier).erased)
     }
 }
 
@@ -297,13 +333,5 @@ internal struct SwiftUIFieldVisitor<Style: OmniformStyle>: FieldVisiting {
         } else {
             return (id, EmptyView().erased)
         }
-    }
-}
-
-// MARK: - Utility
-
-fileprivate extension SwiftUIFieldPresenting {
-    func body(for field: Metadata, binding: some ValueBinding<Value>, modifier: some ViewModifier) -> AnyView {
-        self.body(for: field, binding: binding).modifier(modifier).erased
     }
 }

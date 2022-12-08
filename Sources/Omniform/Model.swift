@@ -16,7 +16,7 @@ public struct FormModel {
         }
     }
     
-    fileprivate enum Record: Identifiable {
+    fileprivate enum Record: Identifiable, Equatable {
         case field(Metadata, id: AnyHashable, ui: any FieldRecordProtocol)
         case group(FormModel, id: AnyHashable, ui: any GroupRecordProtocol)
         
@@ -34,6 +34,17 @@ public struct FormModel {
                 case let .group(model, id: _, ui: ui):
                     self = .group(model, id: newValue, ui: ui)
                 }
+            }
+        }
+        
+        public static func ==(lhs: FormModel.Record, rhs: FormModel.Record) -> Bool {
+            switch (lhs, rhs) {
+            case (.field(let lhsMetadata, let lhsId, _), .field(let rhsMetadata, id: let rhsId, ui: _)):
+                return lhsMetadata == rhsMetadata && lhsId == rhsId
+            case (.group(let lhsModel, let lhsId, _), .group(let rhsModel, id: let rhsId, ui: _)):
+                return lhsModel == rhsModel && lhsId == rhsId
+            default:
+                return false
             }
         }
     }
@@ -100,7 +111,7 @@ public struct FormModel {
         if let trampoline = CustomFormPresentableDispatch(type: S.self, binding: binding) as? CustomFormTrampoline {
             self = trampoline.form
         } else {
-            let metadata = Metadata(type: S.self, id: \S.self, externalName: String(describing: S.self))
+            let metadata = Metadata(type: S.self, id: Member.NoID(), externalName: String(describing: S.self))
             let members = Prototype(reflecting: binding, options: options).members
             self.init(metadata: metadata, members: members)
         }
@@ -122,7 +133,7 @@ public struct FormModel {
     }
     
     private init(metadata: Metadata, records: [Record]) {
-        self.metadata = metadata
+        self.metadata = metadata.with(id: metadata.id is Member.NoID ? UUID() : metadata.id)
         self.members = records
     }
     
@@ -135,7 +146,6 @@ public struct FormModel {
     /// - Parameter visitor: visitor that builds elements from provided form fields
     /// - Returns: a collection of elements built from this form's fields
     public func fields<Visitor: FieldVisiting>(using visitor: Visitor) -> some RandomAccessCollection<Visitor.Result> {
-        
         self.members.lazy.map { record in
             switch record {
             case .group(let model, id: let id, ui: let trampoline):
@@ -183,6 +193,16 @@ extension FormModel: CustomFieldFormattable {
     @available(iOS 15.0, *)
     public static var preferredFormatStyle: AnyFormatStyle<FormModel, String> {
         AnyFormatStyle<Self, String>.dynamic { _ in "" }
+    }
+}
+
+extension FormModel: Identifiable {
+    public var id: AnyHashable { self.metadata.id }
+}
+
+extension FormModel: Equatable {
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
+        lhs.metadata == rhs.metadata && lhs.members == rhs.members
     }
 }
 

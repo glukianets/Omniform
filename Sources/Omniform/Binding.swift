@@ -184,7 +184,14 @@ extension KeyPathBinding: CustomDebugStringConvertible {
                 return "r"
             }
         }
-        return "KeyPathBinding<\(Self.Value)>(\(self.value)) { \(access) through \(Self.Root) }"
+        var base : String {
+            if self.root is any ValueBinding {
+                return String(reflecting: self.root)
+            } else {
+                return "\(Self.Root)"
+            }
+        }
+        return "KeyPathBinding<\(Self.Value)>(\(self.value)) { \(access) through \(base) }"
     }
 }
 
@@ -209,8 +216,14 @@ private struct ClosureBinding<Value, Set>: ValueBinding {
     }
 
     public func map<Result>(keyPath: KeyPath<Value, Result>) -> any ValueBinding<Result> {
-        let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
-        return KeyPathBinding(from: self, through: kp)
+        if let selfSet = self.set as? (Value) -> Void {
+            typealias Rebound = ClosureBinding<Value, (Value) -> Void>
+            let rebound = Rebound(self.get, set: selfSet)
+            return KeyPathBinding(from: rebound, through: (\Rebound.value).appending(path: keyPath))
+        } else {
+            let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
+            return KeyPathBinding(from: self, through: kp).normalized
+        }
     }
 
     public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any ValueBinding<Result> {
@@ -298,7 +311,7 @@ extension SwiftUI.Binding: WritableValueBinding {
     
     public func map<Result>(keyPath: KeyPath<Value, Result>) -> any ValueBinding<Result> {
         let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
-        return KeyPathBinding(from: self, through: kp)
+        return KeyPathBinding(from: self, through: kp).normalized
     }
     
     @_disfavoredOverload
@@ -323,12 +336,12 @@ extension SwiftUI.Binding: WritableValueBinding {
 // MARK: - Debugging
 
 extension ValueBinding {
-    func print(_ tag: String) -> any ValueBinding<Value> {
+    public func print(_ tag: String, describeValue: @escaping (Value) -> String = String.init(describing:)) -> any ValueBinding<Value> {
         return self.map {
-            Swift.print("\(tag) get: \($0)")
+            Swift.print("\(tag) get: \(describeValue($0))")
             return $0
         } set: {
-            Swift.print("\(tag) set: \($0) -> \($1)")
+            Swift.print("\(tag) set: \(describeValue($0)) -> \(describeValue($1))")
             $0 = $1
         }
     }

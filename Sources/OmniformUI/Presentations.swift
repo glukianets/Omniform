@@ -34,18 +34,44 @@ extension Presentations.Group: SwiftUIGroupPresenting {
         let model: FormModel
         @Binding var value: Value
         var format: AnyFormatStyle<Value, String>?
+        @State var selection: String? = nil
 
         var body: some View {
-            if self.presentationKind != .standalone {
-                NavigationLink(destination: DynamicView(OmniformView(model: model))) {
-                    MetadataDisplay(model.metadata, value: self.$value, format: self.format)
-                }
-            } else {
-                Button(action: { self.isPresenting.toggle() }) {
-                    MetadataDisplay(model.metadata, value: self.$value, format: self.format)
-                        .popover(isPresented: self.$isPresenting) {
-                            OmniformView(model: model)
+            let destination = DynamicView {
+                OmniformView(model: model)
+                    .omniformPresentation(self.presentationKind.derived)
+            }
+            
+            return SwiftUI.Group {
+                switch self.presentationKind {
+                case .embed:
+                    Button(action: { self.isPresenting.toggle() }) {
+                        MetadataDisplay(model.metadata, value: self.$value, format: self.format)
+                            .sheet(isPresented: self.$isPresenting) {
+                                destination
+                            }
+                    }
+                case .stack:
+                    NavigationLink(destination: destination, tag: "test", selection: self.$selection) {
+                        MetadataDisplay(model.metadata, value: self.$value, format: self.format)
+                    }
+                case .split:
+                    if self.presentationKind.isDerived {
+                        NavigationLink(destination: destination, tag: "test", selection: self.$selection) {
+                            MetadataDisplay(model.metadata, value: self.$value, format: self.format)
                         }
+                    } else {
+                        let destination = NavigationView {
+                            destination
+                        }.navigationViewStyle(.stack)
+                        
+                        SplitNavigationDetailLink(destination: destination) {
+                            MetadataDisplay(model.metadata, value: self.$value, format: self.format)
+                        }
+                    }
+
+                default:
+                    destination
                 }
             }
         }
@@ -64,8 +90,6 @@ extension Presentations.Group: SwiftUIGroupPresenting {
             } footer: {
                 if let caption = self.caption {
                     MetadataTextView(caption)
-                } else {
-                    EmptyView()
                 }
             }
         }
@@ -483,7 +507,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
                         options: {
                             if
                                 case .none = content.presentation,
-                                self.omniformPresentation != .standalone
+                                self.omniformPresentation.isDerived
                             {
                                 return .dismissOnSelection
                             } else {

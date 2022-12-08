@@ -19,6 +19,30 @@ internal struct DynamicView<T: View>: View {
     }
 }
 
+internal struct AlwaysRecalculate<Content>: View where Content: View {
+    private struct NotEqual: View & Equatable {
+        public var body: Content
+        
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            false
+        }
+    }
+    
+    private let block: () -> Content
+    
+    public init(_ block: @escaping @autoclosure () -> Content) {
+        self.block = block
+    }
+    
+    public init(@ViewBuilder _ block: @escaping () -> Content) {
+        self.block = block
+    }
+    
+    public var body: some View {
+        NotEqual(body: self.block()).equatable()
+    }
+}
+
 // MARK: - scrollDismissesKeyboard
 
 internal enum ScrollDismissesKeyboardMode {
@@ -68,6 +92,13 @@ extension View {
         } else {
             return AnyView(self)
         }
+    }
+    
+    internal static var changes: EmptyView {
+        if #available(iOS 15.0, *) {
+            Self._printChanges()
+        }
+        return EmptyView()
     }
 }
 
@@ -228,6 +259,7 @@ internal struct UIIntrospectionView<T: UIResponder>: UIViewRepresentable {
 
 internal extension View {
 #if os(iOS)
+    @_disfavoredOverload
     func introspect<T: UIResponder>(
         matching match: some IntrospectionMatching,
         _ block: @escaping (T?) -> Introspection.FlowControl
@@ -242,4 +274,94 @@ internal extension View {
         self.background(UIIntrospectionView<T>(matcher: match) { (it: T?) -> Introspection.FlowControl in block(it); return .break })
     }
 #endif
+}
+
+extension Color {
+    internal static var primaryLabel: Self {
+        .init(UIColor.label)
+    }
+    
+    internal static var secondaryLabel: Self {
+        .init(UIColor.secondaryLabel)
+    }
+    
+    internal static var tertiaryLabel: Self {
+        .init(UIColor.tertiaryLabel)
+    }
+    
+    internal static var primaryBackground: Self {
+        .init(UIColor.systemBackground)
+    }
+    
+    internal static var secondaryBackground: Self {
+        .init(UIColor.secondarySystemBackground)
+    }
+    
+    internal static var tertiaryBackground: Self {
+        .init(UIColor.tertiarySystemBackground)
+    }
+    
+    internal static var primaryGroupedBackground: Self {
+        .init(UIColor.systemGroupedBackground)
+    }
+    
+    internal static var secondaryGroupedBackground: Self {
+        .init(UIColor.secondarySystemGroupedBackground)
+    }
+    
+    internal static var tertiaryGroupedBackground: Self {
+        .init(UIColor.tertiarySystemGroupedBackground)
+    }
+}
+
+extension EmptyView {
+    internal init(_ block: () -> Void) {
+        block()
+        self.init()
+    }
+}
+
+// MARK: - TypeBox
+
+internal struct TypeBox<T>: Hashable {
+    static func == (lhs: TypeBox<T>, rhs: TypeBox<T>) -> Bool {
+        lhs.type == rhs.type
+    }
+
+    public let type: T.Type
+    
+    public init(_ type: T.Type = T.self) {
+        self.type = type
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self.type))
+    }
+}
+
+// MARK: - ImposedIdentity
+
+@dynamicMemberLookup
+internal struct ImposedIdentity<ID: Hashable, Value>: Identifiable {
+    public let id: ID
+    public var value: Value
+   
+    public init(id: ID, value: Value) {
+        self.id = id
+        self.value = value
+    }
+
+    subscript<R>(dynamicMember keyPath: KeyPath<Value, R>) -> R {
+        self.value[keyPath: keyPath]
+    }
+    
+    subscript<R>(dynamicMember keyPath: WritableKeyPath<Value, R>) -> R {
+        get { self.value[keyPath: keyPath] }
+        set { self.value[keyPath: keyPath] = newValue }
+    }
+    
+    subscript<R>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, R>) -> R {
+        get { self.value[keyPath: keyPath] }
+        nonmutating set { self.value[keyPath: keyPath] = newValue }
+    }
 }
