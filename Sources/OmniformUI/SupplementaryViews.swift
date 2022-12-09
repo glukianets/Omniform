@@ -112,7 +112,7 @@ internal struct Formatted<Value>: View {
     }
 
     public var body: Text {
-        if let text = (self as? FormatTextBuilding)?.textView {
+        if #available(iOS 15, *), let text = (self as? FormatTextBuilding)?.textView {
             return text
         } else {
             return Text(self.format.format(self.value))
@@ -120,6 +120,7 @@ internal struct Formatted<Value>: View {
     }
 }
 
+@available(iOS 15, macOS 13, *)
 private protocol FormatTextBuilding {
     var textView: Text? { get }
 }
