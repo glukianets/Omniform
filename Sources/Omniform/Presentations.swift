@@ -64,7 +64,7 @@ extension Presentations {
             guard case .section = self else { return model }
 
             self = .inline()
-            let result = FormModel {
+            let result = FormModel(id: metadata.id) {
                 for submodel in GroupSectionFlattener().flatten(model) {
                     .group(model: submodel, ui: .section())
                 }
@@ -297,13 +297,13 @@ extension Presentations {
             case .inline:
                 return nil
             case .screen:
-                return FormModel(name: metadata.name, icon: metadata.icon) {
-                    .group(ui: .section(caption: prompt)) {
+                return FormModel(id: metadata.id, name: metadata.name, icon: metadata.icon) {
+                    .group(id: metadata.id, ui: .section(caption: prompt)) {
                         .field(binding, metadata: metadata, ui: self)
                     }
                 }
             case .section:
-                return FormModel(name: metadata.name, icon: metadata.icon) {
+                return FormModel(id: metadata.id, name: metadata.name, icon: metadata.icon) {
                     .field(binding, metadata: metadata, ui: self)
                 }
             case .custom(var presentation):
@@ -563,7 +563,7 @@ extension Presentations {
         public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
             guard case .selection(let content) = self else { return nil }
             if let group = content.presentation as? Group<Value>, case .inline = group { return nil }
-            return .init(name: metadata.name, icon: metadata.icon) {
+            return .init(id: metadata.id, name: metadata.name, icon: metadata.icon) {
                 .field(
                     binding,
                     metadata: metadata,

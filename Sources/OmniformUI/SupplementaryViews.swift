@@ -132,48 +132,6 @@ extension Formatted: FormatTextBuilding where Value: Equatable {
     }
 }
 
-// MARK: - SplitView
-
-internal struct SplitView<Content, Master, Detail>: View where Master: View, Detail: View {
-    @State private var content: Content
-    private let master: (Binding<Content>) -> Master
-    private let detail: (Content) -> Detail
-    
-    public init(
-        content: Content,
-        @ViewBuilder master: @escaping (Binding<Content>) -> Master,
-        @ViewBuilder detail: @escaping (Content) -> Detail
-    ) {
-        self._content = .init(initialValue: content)
-        self.master = master
-        self.detail = detail
-    }
-    
-    var body: some View {
-        GeometryReader{ geometry in
-            HStack {
-                self.master(self.$content)
-                    .frame(width: max(320, geometry.size.width / 3.0))
-                    .environment(\.[splitViewDetail: TypeBox(Content.self)], self.$content)
-                Divider()
-                self.detail(self.content)
-            }
-        }
-        .background(Color.primaryGroupedBackground.ignoresSafeArea())
-    }
-}
-
-fileprivate struct SplitViewProxyKey<Content>: EnvironmentKey {
-    static var defaultValue: Binding<Content>? { nil }
-}
-
-extension EnvironmentValues {
-    internal subscript<Content>(splitViewDetail content: TypeBox<Content>) -> Binding<Content>? {
-        get { self[SplitViewProxyKey<Content>.self] }
-        set { self[SplitViewProxyKey<Content>.self] = newValue }
-    }
-}
-
 // MARK: - SplitNavigationView
 
 internal struct SplitNavigationView: View {
@@ -187,6 +145,9 @@ internal struct SplitNavigationView: View {
         }
     }
     
+    @State var selection: AnyHashable? = nil
+    @State var content: [AnyHashable: ImposedIdentity<AnyHashable, AnyView>] = [:]
+    
     private let master: AnyView
     private let detail: AnyView
     
@@ -199,44 +160,87 @@ internal struct SplitNavigationView: View {
     }
 
     var body: some View {
-        SplitView(content: Detail(id: UUID(), view: { self.detail })) { proxy in
-            self.master
-        } detail: { proxy in
-            proxy.view()
+        GeometryReader{ geometry in
+            HStack {
+                NavigationView {
+                    self.master
+                        .environment(\.splitViewSelection, self.$selection)
+                }.frame(width: max(320, geometry.size.width / 3.0))
+                Divider()
+                NavigationView {
+                    if let selection = self.selection, let content = self.content[selection] {
+                        content.value
+                    } else {
+                        self.detail
+                    }
+                }
+            }.navigationViewStyle(.stack)
+        }
+        .background(Color.primaryGroupedBackground.ignoresSafeArea())
+        .onPreferenceChange(SplitNavigationViewContentKey.self) { content in
+            self.content = content
         }
     }
 }
 
-internal struct SplitNavigationDetailLink: View {
+fileprivate struct SplitNavigationViewSelectionKey: EnvironmentKey {
+    static var defaultValue: Binding<AnyHashable?>? { nil }
+}
+
+extension EnvironmentValues {
+    fileprivate var splitViewSelection: Binding<AnyHashable?>? {
+        get { self[SplitNavigationViewSelectionKey.self] }
+        set { self[SplitNavigationViewSelectionKey.self] = newValue }
+    }
+}
+
+fileprivate struct SplitNavigationViewContentKey: PreferenceKey {
+    static var defaultValue: [AnyHashable: ImposedIdentity<AnyHashable, AnyView>] = [:]
+    
+    static func reduce(value: inout Value, nextValue: () -> Value) {
+        value.merge(nextValue()) { l, _ in l }
+    }
+}
+
+internal struct SplitNavigationLink<Label, Destination>: View where Label: View, Destination: View {
+    @Environment(\.splitViewSelection) var selection
     @State var id: AnyHashable = UUID()
-    @Environment(\.[splitViewDetail: TypeBox<SplitNavigationView.Detail>()])
-    private var proxy: Binding<SplitNavigationView.Detail>?
+    var tid: AnyHashable = UUID()
+    var label: () -> Label
+    var destination: () -> Destination
     
-    var destination: () -> AnyView
-    var label: () -> AnyView
-    
-    public init(destination: @escaping @autoclosure () -> some View, @ViewBuilder label: @escaping () -> some View) {
-        self.destination = { destination().erased }
-        self.label = { label().erased }
+    public init(destination: @autoclosure @escaping () -> Destination, @ViewBuilder label: @escaping () -> Label) {
+        self.destination = destination
+        self.label = label
     }
     
     var body: some View {
-        Button {
-            self.proxy?.value = .init(id: self.id, view: self.destination)
-        } label: {
-            HStack {
-                self.label()
-                    .foregroundColor(self.isSelected ? .primaryBackground : .primaryLabel)
-                Spacer()
-                Image(systemName: "chevron.forward")
-                    .foregroundColor(self.isSelected ? .tertiaryBackground : .tertiaryLabel)
+        Group {
+            if let selection = self.selection {
+                Button {
+                    selection.value = self.id
+                } label: {
+                    HStack {
+                        self.label()
+                            .foregroundColor(self.isSelected ? .primaryBackground : .primaryLabel)
+                        Spacer()
+                        Image(systemName: "chevron.forward")
+                            .foregroundColor(self.isSelected ? .tertiaryBackground : .tertiaryLabel)
+                    }
+                }
+                .listRowBackground(self.isSelected ? Color.accentColor : Color.secondaryGroupedBackground)
+            } else {
+                NavigationLink(destination: self.destination, label: self.label)
             }
         }
-        .listRowBackground(self.isSelected ? Color.accentColor : Color.secondaryGroupedBackground)
+        .preference(
+            key: SplitNavigationViewContentKey.self,
+            value: [self.id: ImposedIdentity(id: self.tid, value: self.destination().erased)]
+        )
     }
     
     private var isSelected: Bool {
-        self.proxy?.value.id == AnyHashable(self.id)
+        self.selection?.value == AnyHashable(self.id)
     }
 }
 

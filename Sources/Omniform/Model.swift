@@ -72,11 +72,12 @@ public struct FormModel {
     ///   - icon: icon
     ///   - builder: form builder
     public init(
+        id: AnyHashable? = nil,
         name: Metadata.Text? = nil,
         icon: Metadata.Image? = nil,
         @Builder builder: () -> Prototype
     ) {
-        let metadata = Metadata(type: FormModel.self, id: Member.NoID(), name: name, icon: icon)
+        let metadata = Metadata(type: FormModel.self, id: id ?? AnyHashable(Member.NoID()), name: name, icon: icon)
         self = .init(metadata: metadata, builder: builder)
     }
     
@@ -111,7 +112,7 @@ public struct FormModel {
         if let trampoline = CustomFormPresentableDispatch(type: S.self, binding: binding) as? CustomFormTrampoline {
             self = trampoline.form
         } else {
-            let metadata = Metadata(type: S.self, id: Member.NoID(), externalName: String(describing: S.self))
+            let metadata = Metadata(type: S.self, id: ObjectIdentifier(S.self), externalName: String(describing: S.self))
             let members = Prototype(reflecting: binding, options: options).members
             self.init(metadata: metadata, members: members)
         }
@@ -202,7 +203,8 @@ extension FormModel: Identifiable {
 
 extension FormModel: Equatable {
     public static func ==(lhs: Self, rhs: Self) -> Bool {
-        lhs.metadata == rhs.metadata && lhs.members == rhs.members
+        // TODO: Proper model equality
+        false
     }
 }
 
@@ -461,12 +463,13 @@ extension FormModel {
         }
         
         public static func group(
+            id: AnyHashable? = nil,
             name: Metadata.Text? = nil,
             icon: Metadata.Image? = nil,
             ui presentation: Presentations.Group<FormModel> = .section(),
             @Builder _ builder: () -> Prototype
         ) -> Self {
-            let model = FormModel(name: name, icon: icon, builder: builder)
+            let model = FormModel(id: id, name: name, icon: icon, builder: builder)
             return .group(
                 bind(value: model),
                 model: model,

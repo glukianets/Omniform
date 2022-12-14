@@ -100,6 +100,10 @@ extension View {
         }
         return EmptyView()
     }
+    
+    func modify<Content>(@ViewBuilder _ block: @escaping (Self) -> Content) -> Content {
+        block(self)
+    }
 }
 
 // MARK: - String
@@ -363,5 +367,15 @@ internal struct ImposedIdentity<ID: Hashable, Value>: Identifiable {
     subscript<R>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, R>) -> R {
         get { self.value[keyPath: keyPath] }
         nonmutating set { self.value[keyPath: keyPath] = newValue }
+    }
+}
+
+extension ImposedIdentity: Hashable {
+    static func == (lhs: ImposedIdentity<ID, Value>, rhs: ImposedIdentity<ID, Value>) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(self.id)
     }
 }

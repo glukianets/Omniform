@@ -22,22 +22,23 @@ public struct Omniform: View {
         let omniform = OmniformView(self.binding)
             .omniformPresentation(self.presentationKind)
             .navigationBarItems(leading: self.leadingNavigationItems)
-        
-        let masterNavigation = NavigationView {
-            if #available(iOS 15.0, *) {
-                omniform
-                    .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
-            } else {
-                omniform
+            .modify { content in
+                if #available(iOS 15.0, *) {
+                    content
+                        .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
+                } else {
+                    content
+                }
             }
-        }.navigationViewStyle(.stack)
         
         switch self.presentationKind {
         case .stack:
-            masterNavigation
+            NavigationView {
+                omniform
+            }.navigationViewStyle(.stack)
         case .split:
             SplitNavigationView {
-                masterNavigation
+                omniform
             } detail: {
                 Text("")
             }
@@ -90,6 +91,12 @@ public struct Omniform: View {
                 }
             }
         }
+    }
+}
+
+extension Omniform: Equatable {
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
+        false
     }
 }
 

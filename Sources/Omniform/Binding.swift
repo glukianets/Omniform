@@ -310,8 +310,16 @@ extension SwiftUI.Binding: WritableValueBinding {
     }
     
     public func map<Result>(keyPath: KeyPath<Value, Result>) -> any ValueBinding<Result> {
-        let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
-        return KeyPathBinding(from: self, through: kp).normalized
+        if let keyPath = keyPath as? WritableKeyPath<Value, Result> {
+            return self[dynamicMember: keyPath]
+        } else {
+            let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
+            return KeyPathBinding(from: self, through: kp).normalized
+        }
+    }
+    
+    public func map<Result>(keyPath: WritableKeyPath<Value, Result>) -> any WritableValueBinding<Result> {
+        self[dynamicMember: keyPath]
     }
     
     @_disfavoredOverload

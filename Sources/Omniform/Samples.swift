@@ -108,7 +108,7 @@ public enum Samples {
             
             struct Dynamic: CustomFormBuilding {
                 static func buildForm(_ binding: some ValueBinding) -> FormModel.Prototype {
-                    .group(name: "group") {
+                    .group(id: UUID(), name: "group") {
                         for i in 1..<12 {
                             .field(bind(value: false), name: "Test", icon: .system("\(i).lane"), ui: .toggle)
                         }

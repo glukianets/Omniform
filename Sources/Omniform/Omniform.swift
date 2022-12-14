@@ -55,7 +55,7 @@ extension CustomFormPresentable {
 extension CustomFormPresentable where Self: CustomFormBuilding {
     public static func formModel(for binding: some ValueBinding<Self>) -> FormModel {
         let builder: () -> FormModel.Prototype = { self.buildForm(binding) }
-        return FormModel(name: self.formName, icon: self.formIcon, builder: builder)
+        return FormModel(id: ObjectIdentifier(Self.self), name: self.formName, icon: self.formIcon, builder: builder)
     }
 }
 

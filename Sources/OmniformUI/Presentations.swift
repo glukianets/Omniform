@@ -34,7 +34,6 @@ extension Presentations.Group: SwiftUIGroupPresenting {
         let model: FormModel
         @Binding var value: Value
         var format: AnyFormatStyle<Value, String>?
-        @State var selection: String? = nil
 
         var body: some View {
             let destination = DynamicView {
@@ -42,34 +41,25 @@ extension Presentations.Group: SwiftUIGroupPresenting {
                     .omniformPresentation(self.presentationKind.derived)
             }
             
+            let label = MetadataDisplay(model.metadata, value: self.$value, format: self.format)
+            
             return SwiftUI.Group {
                 switch self.presentationKind {
                 case .embed:
                     Button(action: { self.isPresenting.toggle() }) {
-                        MetadataDisplay(model.metadata, value: self.$value, format: self.format)
+                        label
                             .sheet(isPresented: self.$isPresenting) {
                                 destination
                             }
                     }
-                case .stack:
-                    NavigationLink(destination: destination, tag: "test", selection: self.$selection) {
-                        MetadataDisplay(model.metadata, value: self.$value, format: self.format)
+                case .stack, .split where self.presentationKind.isDerived:
+                    NavigationLink(destination: destination, isActive: self.$isPresenting) {
+                        label
                     }
-                case .split:
-                    if self.presentationKind.isDerived {
-                        NavigationLink(destination: destination, tag: "test", selection: self.$selection) {
-                            MetadataDisplay(model.metadata, value: self.$value, format: self.format)
-                        }
-                    } else {
-                        let destination = NavigationView {
-                            destination
-                        }.navigationViewStyle(.stack)
-                        
-                        SplitNavigationDetailLink(destination: destination) {
-                            MetadataDisplay(model.metadata, value: self.$value, format: self.format)
-                        }
+                case .split where !self.presentationKind.isDerived:
+                    SplitNavigationLink(destination: destination) {
+                        label
                     }
-
                 default:
                     destination
                 }
