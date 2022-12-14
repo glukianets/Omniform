@@ -7,43 +7,44 @@ public struct Omniform: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     @State private var query: String = ""
-    private let binding: any ValueBinding
+    private let decoupler: Decoupler
     
     public init(_ binding: some ValueBinding) {
-        self.binding = binding
+        self.decoupler = .init(binding: binding)
     }
     
     public init(model: FormModel) {
-        let binding = bind(value: model)
-        self.init(binding)
+        self.decoupler = .init(form: model)
     }
     
     public var body: some View {
-        let omniform = OmniformView(self.binding)
-            .omniformPresentation(self.presentationKind)
-            .navigationBarItems(leading: self.leadingNavigationItems)
-            .modify { content in
-                if #available(iOS 15.0, *) {
-                    content
-                        .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
-                } else {
-                    content
+        self.decoupler.body { model in
+            let omniform = OmniformView(model: model)
+                .omniformPresentation(self.presentationKind)
+                .navigationBarItems(leading: self.leadingNavigationItems)
+                .modify { content in
+                    if #available(iOS 15.0, *) {
+                        content
+                            .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
+                    } else {
+                        content
+                    }
                 }
-            }
-        
-        switch self.presentationKind {
-        case .stack:
-            NavigationView {
+            
+            switch self.presentationKind {
+            case .stack:
+                NavigationView {
+                    omniform
+                }.navigationViewStyle(.stack)
+            case .split:
+                SplitNavigationView {
+                    omniform
+                } detail: {
+                    Text("")
+                }
+            default:
                 omniform
-            }.navigationViewStyle(.stack)
-        case .split:
-            SplitNavigationView {
-                omniform
-            } detail: {
-                Text("")
             }
-        default:
-            omniform
         }
     }
     

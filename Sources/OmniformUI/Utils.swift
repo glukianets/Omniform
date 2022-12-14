@@ -114,11 +114,45 @@ internal extension String {
     }
 }
 
+// MARK: - Optional
+
+internal extension Optional {
+    var forciblyUnwrapped: Wrapped {
+        get { self! }
+        set { self = .some(newValue) }
+    }
+}
+
 // MARK: - Metadata
 
 internal extension Metadata {
     var displayName: String {
         self.name?.description ?? ""
+    }
+}
+
+// MARK: - WeakBox
+
+@dynamicMemberLookup
+internal struct WeakBox<Reference: AnyObject> {
+    weak var reference: Reference?
+    
+    public init(_ reference: Reference?) {
+        self.reference = reference
+    }
+    
+    public subscript<R>(dynamicMember keyPath: KeyPath<Reference, R>) -> R! {
+        self.reference?[keyPath: keyPath]
+    }
+    
+    public subscript<R>(dynamicMember keyPath: WritableKeyPath<Reference, R>) -> R! {
+        get { self.reference?[keyPath: keyPath] }
+        set { self.reference?[keyPath: keyPath] = newValue }
+    }
+    
+    public subscript<R>(dynamicMember keyPath: ReferenceWritableKeyPath<Reference, R>) -> R! {
+        get { self.reference?[keyPath: keyPath] }
+        nonmutating set { self.reference?[keyPath: keyPath] = newValue }
     }
 }
 

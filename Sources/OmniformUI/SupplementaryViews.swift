@@ -248,28 +248,15 @@ internal struct SplitNavigationLink<Label, Destination>: View where Label: View,
 
 internal struct Decoupler {
     private final class FormState<Value>: ObservableObject {
-        @Published var value: Value {
-            willSet {
-                self.updateCount += 1;
-                self.binding = newValue
-            }
-        }
-
-        private var updateCount: Int = 0 {
+        @Binding private var binding: Value
+        @Published public var value: Value {
             didSet {
-                print("update: \(self.updateCount) @ \(ObjectIdentifier(self))")
+                self.binding = self.value
             }
         }
-        
-        private var binding: Value {
-            get { self._binding.value }
-            set { self._binding.value = newValue; self.updateCount += 1; }
-        }
-        private var _binding: Binding<Value>
-        private var cancellables: [AnyCancellable] = []
 
         public lazy var model: FormModel = {
-            let binding = bind(object: self, through: \.value)
+            let binding = bind(value: WeakBox(self), through: \.value.forciblyUnwrapped)
             return FormModel(binding)
         }()
 
@@ -277,21 +264,14 @@ internal struct Decoupler {
             self.value = binding.value
             self._binding = binding.forSwiftUI
         }
-
-        public func update(binding: some ValueBinding<Value>) {
-            self.value = binding.value
-            self._binding = binding.forSwiftUI
-        }
     }
 
     private struct DecouplingView<Value, Content: View>: View {
-        @ObservedObject private var state: FormState<Value>
-        private let binding: any ValueBinding<Value>
+        @StateObject private var state: FormState<Value>
         private let content: (FormModel) -> Content
         
         public init(binding: any ValueBinding<Value>, content: @escaping (FormModel) -> Content) {
             self._state = .init(wrappedValue: .init(binding: binding))
-            self.binding = binding
             self.content = content
         }
         
