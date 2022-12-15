@@ -39,6 +39,34 @@ public protocol FieldVisiting<Result> {
     ) -> Result
 }
 
+// MARK: - FormTransforming
+
+/// A type that presents ``FormModel`` members in a uniform manner
+///
+/// See ``FormModel/applying(tranform:)`` for usage.
+public protocol FormTransforming<Result>: FieldVisiting {
+    associatedtype Result
+   
+    func build(metadata: Metadata, fields: some Collection<Result>) throws -> FormModel
+}
+
+extension FormTransforming {
+    public func build(metadata: Metadata, fields: some Collection<Result>) -> FormModel
+    where Result == FormModel.Member {
+        FormModel(metadata: metadata, prototype: .init(members: fields))
+    }
+    
+    public func build(metadata: Metadata, fields: some Collection<Result>) -> FormModel
+    where Result: Collection<FormModel.Member> {
+        FormModel(metadata: metadata, prototype: .init(members: fields.flatMap { $0 }))
+    }
+    
+    public func build(metadata: Metadata, fields: some Collection<Result>) -> FormModel
+    where Result == FormModel.Member? {
+        FormModel(metadata: metadata, prototype: .init(members: fields.compactMap { $0 }))
+    }
+}
+
 // MARK: - CustomFieldsContaining
 
 /// A type that has customized ``FormModel`` representatoin

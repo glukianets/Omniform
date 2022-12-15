@@ -10,7 +10,7 @@ public struct FormModel {
         public static var excludeUnmarked = Self(rawValue: 1 << 0)
         
         public var rawValue: UInt
-
+        
         public init(rawValue: UInt) {
             self.rawValue = rawValue
         }
@@ -52,8 +52,12 @@ public struct FormModel {
     private static let cache = MirrorCache()
     
     /// This form's metadata
-    public var metadata: Metadata
-    private var members: [Record]
+    public var metadata: Metadata {
+        get { self.guts.header.metadata }
+        set { self.ensureUniqueness(); self.guts.header.metadata = newValue }
+    }
+
+    private var guts: Guts
     
     /// Builds a new model instance using convenient resultBuilder-based syntax
     ///
@@ -129,13 +133,15 @@ public struct FormModel {
         self = .init(metadata: metadata, members: prototype.members)
     }
 
-    private init(metadata: Metadata, members: [Member]) {
-        self.init(metadata: metadata, records: members.enumerated().map { i, m in m.with(id: i) }.map(\.representation))
+    private init(metadata: Metadata, members: some Sequence<Member>) {
+        self.init(guts: .create(
+            metadata: metadata.with(id: metadata.id is Member.NoID ? UUID() : metadata.id),
+            members: members.enumerated().map { i, m in m.with(id: i) }.map(\.representation)
+        ))
     }
     
-    private init(metadata: Metadata, records: [Record]) {
-        self.metadata = metadata.with(id: metadata.id is Member.NoID ? UUID() : metadata.id)
-        self.members = records
+    private init(guts: Guts) {
+        self.guts = guts
     }
     
     /// Builds a collection of form fields elements
@@ -147,7 +153,7 @@ public struct FormModel {
     /// - Parameter visitor: visitor that builds elements from provided form fields
     /// - Returns: a collection of elements built from this form's fields
     public func fields<Visitor: FieldVisiting>(using visitor: Visitor) -> some RandomAccessCollection<Visitor.Result> {
-        self.members.lazy.map { record in
+        self.guts.lazy.map { record in
             switch record {
             case .group(let model, id: let id, ui: let trampoline):
                 return trampoline.visit(group: model, id: id, builder: visitor)
@@ -157,28 +163,61 @@ public struct FormModel {
         }
     }
     
+    /// Creates a new form applying transform
+    ///
+    /// - Parameter transform: object that builds form fields and, subsequentially, the entire form.
+    /// - Returns: a new form
+    public func applying(transform: some FormTransforming) throws -> Self {
+        try transform.build(metadata: self.metadata, fields: self.fields(using: transform))
+    }
+    
     /// Filters a form to match seqrch query
     /// - Parameter query: string to match with lose text search
     /// - Returns: a derived form that only contains matching members or nil if nothing was found
     public func filtered(using query: String) -> Self? {
         guard !query.isEmpty else { return self }
 
-        return .init(metadata: self.metadata, records: self.members.compactMap {
-            switch $0 {
-            case .field(let metadata, id: _, ui: _) where metadata.matches(query: query):
-                return $0
-            case .group(let model, id: let id, ui: _):
-                return model.filtered(using: query).flatMap {
-                    !$0.members.isEmpty ? FormModel.Member.group(
-                        bind(value: $0),
-                        model: $0,
-                        ui: Presentations.Group<FormModel>.section()
-                    ).with(id: id).representation : nil
-                }
-            default:
-                return nil
+        struct QueryTransform: FormTransforming {
+            typealias Result = FormModel.Member?
+            struct ModelDoesNotMatchError: Error {}
+
+            var query: String
+            
+            func build(metadata: Metadata, fields: some Collection<Result>) throws -> FormModel {
+                guard !fields.isEmpty else { throw ModelDoesNotMatchError() }
+                return FormModel(metadata: metadata, members: fields.compactMap { $0 })
             }
-        })
+
+            func visit<Value>(
+                field: Metadata,
+                id: AnyHashable,
+                using presentation: some FieldPresenting<Value>,
+                through binding: some ValueBinding<Value>
+            ) -> FormModel.Member? {
+                guard field.matches(query: self.query) else { return nil }
+                return .field(binding, metadata: field, ui: presentation)
+            }
+            
+            func visit<Value>(
+                group: FormModel,
+                id: AnyHashable,
+                using presentation: some GroupPresenting<Value>,
+                through binding: some ValueBinding<Value>
+            ) -> FormModel.Member? {
+                (try? group.applying(transform: self)).map {
+                    var model = $0
+                    model.metadata = model.metadata.with(id: id)
+                    return .group(model: $0, ui: .section())
+                }
+            }
+        }
+        
+        return try? self.applying(transform: QueryTransform(query: query))
+    }
+    
+    private mutating func ensureUniqueness() {
+        guard !isKnownUniquelyReferenced(&self.guts) else { return }
+        self = Self.init(guts: self.guts.clone())
     }
 }
 
@@ -233,7 +272,7 @@ extension FormModel: CustomDebugStringConvertible {
             return fields.isEmpty ? nil : fields.joined(separator: ", ")
         }
         
-        let members = self.members.map { record in
+        let members = self.guts.map { record in
             switch record {
             case let .field(metadata, id: _, ui: ui):
                 return """
@@ -404,8 +443,8 @@ extension FormModel {
         
         /// Create instance directly from members
         /// - Parameter members: members
-        public init(members: [Member]) {
-            self.members = members
+        public init(members: some Collection<Member>) {
+            self.members = Array(members)
         }
         
         /// Create instace by inspecting the contents of provided binding
@@ -587,6 +626,89 @@ extension FormModel {
         
         public static func buildArray(_ components: [Prototype]) -> Prototype {
             Prototype(members: components.flatMap(\.members))
+        }
+    }
+}
+
+// MARK: - FormModelGuts
+
+extension FormModel {
+    fileprivate final class Guts: ManagedBuffer<Guts.Header, Record> {
+        public struct Header {
+            var count: Int
+            var metadata: Metadata
+        }
+        
+        public static func create(metadata: Metadata, members: some Collection<Record>) -> Self {
+            let buffer = Self.create(minimumCapacity: members.count) { _ in
+                Header(count: 0, metadata: metadata)
+            } as! Self
+            
+            buffer.append(members)
+            
+            return buffer
+        }
+        
+        deinit {
+            self.withUnsafeMutablePointers { headerPtr, bodyPtr in
+                _ = bodyPtr.deinitialize(count: headerPtr.pointee.count)
+            }
+        }
+        
+        public func append(_ members: some Collection<Record>) {
+            assert(self.capacity >= self.header.count + members.count, "No capacity left")
+            
+            self.header.count += members.count
+            
+            self.withUnsafeMutablePointerToElements { bodyPtr in
+                guard members.withContiguousStorageIfAvailable({ buffer in
+                    bodyPtr.initialize(from: buffer.baseAddress!, count: buffer.count)
+                }) == nil else { return }
+                
+                members.enumerated().forEach { i, e in (bodyPtr + i).initialize(to: e) }
+            }
+        }
+        
+        public func clone() -> Self {
+            Self.create(metadata: self.header.metadata, members: self)
+        }
+    }
+}
+
+extension FormModel.Guts: RandomAccessCollection & MutableCollection {
+    typealias Element = FormModel.Record
+    typealias Index = Int
+
+    var startIndex: Int { 0 }
+    var endIndex: Int { self.header.count }
+
+    subscript(position: Int) -> FormModel.Record {
+        get {
+            assert(self.indices.contains(position), "Index \(position) is out of range \(self.indices)")
+            return self.withUnsafeMutablePointerToElements { ($0 + position).pointee }
+        }
+        set {
+            assert(self.indices.contains(position), "Index \(position) is out of range \(self.indices)")
+            return self.withUnsafeMutablePointerToElements { ($0 + position).pointee = newValue }
+        }
+    }
+    
+    func withContiguousStorageIfAvailable<R>(
+        _ body: (UnsafeBufferPointer<FormModel.Record>) throws -> R
+    ) rethrows -> R? {
+        try self.withUnsafeMutablePointers { headerPtr, bodyPtr in
+            try body(UnsafeBufferPointer(start: bodyPtr, count: headerPtr.pointee.count))
+        }
+    }
+    
+    func withContiguousMutableStorageIfAvailable<R>(
+        _ body: (inout UnsafeMutableBufferPointer<FormModel.Record>) throws -> R
+    ) rethrows -> R? {
+        try self.withUnsafeMutablePointers { headerPtr, bodyPtr in
+            var bufferPtr = UnsafeMutableBufferPointer(start: bodyPtr, count: headerPtr.pointee.count) {
+                didSet { assertionFailure("Buffer must not be replaced") }
+            }
+            return try body(&bufferPtr)
         }
     }
 }
