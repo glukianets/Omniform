@@ -155,7 +155,7 @@ extension Presentations.Nullified: SwiftUIFieldPresenting where Presentation: Sw
         switch self {
         case .matching(let content):
             let binding = binding.map {
-                $0._optional ?? content.nilValue
+                $0.normalized ?? content.nilValue
             } set: {
                 $0 == content.nilValue ? .some(nil) : .some($0)
             }
@@ -415,7 +415,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
                 self.selection = self.selection != self.value ? self.value : nil
             } label: {
                 HStack {
-                    Text(String(optionalyDescribing: self.value))
+                    Text(String(optionallyDescribing: self.value))
                         .foregroundColor(.primary)
                     Spacer()
                     if self.selection == self.value {
@@ -478,7 +478,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
         var body: some View {
             let picker = SwiftUI.Picker(selection: binding) {
                 ForEach(presentation.data.values, id: \.self) { item in
-                    Text(String(optionalyDescribing: item))
+                    Text(String(optionallyDescribing: item))
                 }
             } label: {
                 MetadataLabel(field, value: binding)

@@ -494,7 +494,7 @@ extension Presentations {
             public static var segments: Self { Self(representation: .segments) }
             public static var wheel: Self { Self(representation: .wheel) }
             public static var selection: Self {
-                Self(representation: .selection(.screen(format: .default ?? .dynamic(format: String.init(optionalyDescribing:)))))
+                Self(representation: .selection(.screen(format: .default ?? .dynamic(format: String.init(optionallyDescribing:)))))
             }
             public static func selection(_ presentation: Group<Value>) -> Self {
                 Self(representation: .selection(presentation))

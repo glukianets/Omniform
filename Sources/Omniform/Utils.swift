@@ -83,11 +83,24 @@ public protocol _OptionalProtocol<Wrapped>: ExpressibleByNilLiteral {
     static var none: Self { get }
     static func some(_: Self.Wrapped) -> Self
     
-    var _optional: Wrapped? { get }
+    var normalized: Wrapped? { get }
+    
+    var description: String { get }
 }
 
 extension Optional: _OptionalProtocol {
-    public var _optional: Wrapped? { self }
+    @_implements(_OptionalProtocol, normalized)
+    public var omniform_normalized: Wrapped? { self }
+    
+    @_implements(_OptionalProtocol, description)
+    public var omniform_description: String {
+        guard let wrapped = self else { return "" }
+        if let optional = wrapped as? any _OptionalProtocol {
+            return optional.description
+        } else {
+            return String(describing: wrapped)
+        }
+    }
 }
 
 // MARK: - Lock
@@ -145,7 +158,7 @@ public extension ValueBinding {
 
 internal extension String {
     @usableFromInline
-    init<Subject>(optionalyDescribing value: Subject) {
-        self = (value as? Any?)?.flatMap { String(describing: $0) } ?? ""
+    init(optionallyDescribing value: some Any) {
+        self = (value as? any _OptionalProtocol)?.normalized.flatMap(String.init(describing:)) ?? ""
     }
 }
