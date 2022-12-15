@@ -153,8 +153,8 @@ internal struct SplitNavigationView: View {
     private let detail: AnyView
     
     public init<Master, Detail>(
-        @ViewBuilder master: @escaping () -> Master,
-        @ViewBuilder detail: @escaping () -> Detail
+        @ViewBuilder master: () -> Master,
+        @ViewBuilder detail: () -> Detail
     ) where Master: View, Detail: View {
         self.master = master().erased
         self.detail = detail().erased
@@ -162,12 +162,13 @@ internal struct SplitNavigationView: View {
 
     var body: some View {
         GeometryReader{ geometry in
-            HStack {
+            HStack(spacing: 0) {
                 NavigationView {
                     self.master
                         .environment(\.splitViewSelection, self.$selection)
                 }.frame(width: max(320, geometry.size.width / 3.0))
                 Divider()
+                    .ignoresSafeArea()
                 NavigationView {
                     if let selection = self.selection, let content = self.content[selection] {
                         content.value
