@@ -36,16 +36,32 @@ extension Presentations.Group: SwiftUIGroupPresenting {
         var format: AnyFormatStyle<Value, String>?
 
         var body: some View {
-            if self.presentationKind != .standalone {
-                NavigationLink(destination: DynamicView(OmniformView(model: model))) {
-                    MetadataDisplay(model.metadata, value: self.$value, format: self.format)
-                }
-            } else {
-                Button(action: { self.isPresenting.toggle() }) {
-                    MetadataDisplay(model.metadata, value: self.$value, format: self.format)
-                        .popover(isPresented: self.$isPresenting) {
-                            OmniformView(model: model)
-                        }
+            let destination = DynamicView {
+                OmniformView(model: model)
+                    .omniformPresentation(self.presentationKind.derived)
+            }
+            
+            let label = MetadataDisplay(model.metadata, value: self.$value, format: self.format)
+            
+            return SwiftUI.Group {
+                switch self.presentationKind {
+                case .embed:
+                    Button(action: { self.isPresenting.toggle() }) {
+                        label
+                            .sheet(isPresented: self.$isPresenting) {
+                                destination
+                            }
+                    }
+                case .stack, .split where self.presentationKind.isDerived:
+                    NavigationLink(destination: destination, isActive: self.$isPresenting) {
+                        label
+                    }
+                case .split where !self.presentationKind.isDerived:
+                    SplitNavigationLink(destination: destination) {
+                        label
+                    }
+                default:
+                    destination
                 }
             }
         }
@@ -64,8 +80,6 @@ extension Presentations.Group: SwiftUIGroupPresenting {
             } footer: {
                 if let caption = self.caption {
                     MetadataTextView(caption)
-                } else {
-                    EmptyView()
                 }
             }
         }
@@ -483,7 +497,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
                         options: {
                             if
                                 case .none = content.presentation,
-                                self.omniformPresentation != .standalone
+                                self.omniformPresentation.isDerived
                             {
                                 return .dismissOnSelection
                             } else {
@@ -511,7 +525,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         let swiftUIBinding: Binding<Value>
         if let dv = self.data.deselectionValue {
-            let mapped = binding.map { $0 } set: { $0 = $0 == $1 ? dv : $1 }
+            let mapped = binding.map { $0 } set: { binding.value == $0 ? dv : $0 }
             swiftUIBinding = mapped.forSwiftUI
         } else {
             swiftUIBinding = binding.forSwiftUI

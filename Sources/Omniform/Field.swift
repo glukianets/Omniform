@@ -34,6 +34,12 @@ public struct Field<WrappedValue>: FieldProtocol {
     }
 }
 
+extension Field: Equatable where WrappedValue: Equatable {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.metadata == rhs.metadata && lhs.wrappedValue == rhs.wrappedValue
+    }
+}
+
 extension Field {
     /// Creates the property wrapper with set name, icon, and tags, using default presentation provided for thy type
     /// - Parameters:

@@ -15,8 +15,11 @@ public func bind<Value>(value: Value) -> any ValueBinding<Value>  {
 ///   - root: stored value
 ///   - keyPath: key path to the presented value
 /// - Returns: read-only binding
-public func bind<Root, Value>(value root: Root, through keyPath: KeyPath<Root, Value>) -> any ValueBinding<Value> {
-    KeyPathBinding(from: root, through: keyPath).normalized
+public func bind<Root, Value>(
+    value root: Root,
+    through keyPath: KeyPath<Root, Value>
+) -> any ValueBinding<Value> {
+    KeyPathBinding(from: ValueBox(root), through: (\ValueBox<Root>.value).appending(path: keyPath)).normalized
 }
 
 /// Stores a reference to given object and creates value binding to its property denoted by `keyPath`
@@ -24,7 +27,9 @@ public func bind<Root, Value>(value root: Root, through keyPath: KeyPath<Root, V
 ///   - root: object
 ///   - keyPath: key path to the presented value
 /// - Returns: writable binding
-public func bind<Root: AnyObject, Value>(object root: Root, through keyPath: ReferenceWritableKeyPath<Root, Value>
+public func bind<Root: AnyObject, Value>(
+    object root: Root,
+    through keyPath: ReferenceWritableKeyPath<Root, Value>
 ) -> any WritableValueBinding<Value> {
     KeyPathBinding<Root, Value, ReferenceWritableKeyPath<Root, Value>>(from: root, through: keyPath)
 }
@@ -55,11 +60,11 @@ public protocol ValueBinding<Value> {
     
     var forSwiftUI: SwiftUI.Binding<Value> { get }
     
+    var _writable: (any WritableValueBinding<Value>)? { get }
+    
     func map<Result>(keyPath: KeyPath<Value, Result>) -> any ValueBinding<Result>
    
     func map<Result>(get: @escaping (Value) -> Result) -> any ValueBinding<Result>
-    
-    func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any ValueBinding<Result>
     
     func map<Result>(get: @escaping (Value) -> Result, set: @escaping (Result) -> Value?) -> any ValueBinding<Result>
 }
@@ -72,24 +77,7 @@ public protocol WritableValueBinding<Value>: ValueBinding {
     
     func map<Result>(keyPath: WritableKeyPath<Value, Result>) -> any WritableValueBinding<Result>
 
-    func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any WritableValueBinding<Result>
-    
     func map<Result>(get: @escaping (Value) -> Result, set: @escaping (Result) -> Value?) -> any WritableValueBinding<Result>
-}
-
-extension WritableValueBinding {
-    public func map<Result>(keyPath: WritableKeyPath<Value, Result>) -> any WritableValueBinding<Result> {
-        let kp: ReferenceWritableKeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
-        return KeyPathBinding(from: self, through: kp)
-    }
-    
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (Result) -> Value?) -> any WritableValueBinding<Result> {
-        self.map(get: get) { `var`, val in set(val).map { `var` = $0 } }
-    }
-
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any WritableValueBinding<Result> {
-        ClosureBinding { get(self.value) } set: { set(&self.value, $0) }
-    }
 }
 
 // MARK: - KeyPathBinding
@@ -103,6 +91,8 @@ private struct KeyPathBinding<Root, Value, Path: KeyPath<Root, Value>>: ValueBin
     public var value: Value {
         self.root[keyPath: self.keyPath]
     }
+    
+    public var _writable: (any WritableValueBinding<Value>)? { nil }
     
     internal var normalized: any ValueBinding<Value> {
         switch self.keyPath {
@@ -131,7 +121,10 @@ private struct KeyPathBinding<Root, Value, Path: KeyPath<Root, Value>>: ValueBin
         ClosureBinding { get(self.value) }
     }
         
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (Result) -> Value?) -> any ValueBinding<Result> {
+    public func map<Result>(
+        get: @escaping (Value) -> Result,
+        set: @escaping (Result) -> Value?
+    ) -> any ValueBinding<Result> {
         if let kp = self.keyPath as? ReferenceWritableKeyPath<Root, Value> {
             let root = self.root
             return ClosureBinding { get(root[keyPath: kp]) } set: { set($0).map { root[keyPath: kp] = $0 } }
@@ -140,15 +133,6 @@ private struct KeyPathBinding<Root, Value, Path: KeyPath<Root, Value>>: ValueBin
         }
     }
     
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any ValueBinding<Result> {
-        if let kp = self.keyPath as? ReferenceWritableKeyPath<Root, Value> {
-            let root = self.root
-            return ClosureBinding { get(root[keyPath: kp]) } set: { set(&root[keyPath: kp], $0) }
-        } else {
-            return ClosureBinding { get(self.value) }
-        }
-    }
-
     public var forSwiftUI: SwiftUI.Binding<Value> {
         if let writableKeyPath = self.keyPath as? WritableKeyPath<Root, Value> {
             var root = self.root
@@ -165,10 +149,19 @@ extension KeyPathBinding: WritableValueBinding where Path: ReferenceWritableKeyP
         nonmutating set { self.root[keyPath: self.keyPath] = newValue }
     }
     
+    var writable: (any WritableValueBinding<Value>)? { self }
+    
     func map<Result>(keyPath: WritableKeyPath<Value, Result>) -> any WritableValueBinding<Result> {
         // TODO: Why it doesnt infer proper type without a cast?
         let kp = self.keyPath.appending(path: keyPath) as! ReferenceWritableKeyPath<Root, Result>
         return KeyPathBinding<Root, Result, ReferenceWritableKeyPath<Root, Result>>(from: self.root, through: kp)
+    }
+    
+    func map<Result>(
+        get: @escaping (Value) -> Result,
+        set: @escaping (Result) -> Value?
+    ) -> any WritableValueBinding<Result> {
+        ClosureBinding { get(self.value) } set: { set($0).map { self.value = $0 } }
     }
 }
 
@@ -184,7 +177,14 @@ extension KeyPathBinding: CustomDebugStringConvertible {
                 return "r"
             }
         }
-        return "KeyPathBinding<\(Self.Value)>(\(self.value)) { \(access) through \(Self.Root) }"
+        var base : String {
+            if self.root is any ValueBinding {
+                return String(reflecting: self.root)
+            } else {
+                return "\(Self.Root)"
+            }
+        }
+        return "KeyPathBinding<\(Self.Value)>(\(self.value)) { \(access) through \(base) }"
     }
 }
 
@@ -198,6 +198,8 @@ private struct ClosureBinding<Value, Set>: ValueBinding {
         self.get()
     }
     
+    public var _writable: (any WritableValueBinding<Value>)? { nil }
+    
     internal init(_ get: @escaping () -> Value, set: @escaping (Value) -> Void) where Set == (Value) -> Void {
         self.get = get
         self.set = set
@@ -209,23 +211,13 @@ private struct ClosureBinding<Value, Set>: ValueBinding {
     }
 
     public func map<Result>(keyPath: KeyPath<Value, Result>) -> any ValueBinding<Result> {
-        let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
-        return KeyPathBinding(from: self, through: kp)
-    }
-
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any ValueBinding<Result> {
         if let selfSet = self.set as? (Value) -> Void {
-            return ClosureBinding<Result, (Result) -> Void> { [selfGet = self.get] in
-                get(selfGet())
-            } set: { [selfGet = self.get] in
-                var value = selfGet()
-                set(&value, $0)
-                selfSet(value)
-            }
+            typealias Rebound = ClosureBinding<Value, (Value) -> Void>
+            let rebound = Rebound(self.get, set: selfSet)
+            return KeyPathBinding(from: rebound, through: (\Rebound.value).appending(path: keyPath))
         } else {
-            return ClosureBinding<Result, Void> { [selfGet = self.get] in
-                get(selfGet())
-            }
+            let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
+            return KeyPathBinding(from: self, through: kp).normalized
         }
     }
     
@@ -255,15 +247,7 @@ extension ClosureBinding: WritableValueBinding where Set == (Value) -> Void {
         nonmutating set { self.set(newValue) }
     }
     
-    func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any WritableValueBinding<Result> {
-        ClosureBinding<Result, (Result) -> Void> { [selfGet = self.get] in
-            get(selfGet())
-        } set: { [selfGet = self.get, selfSet = self.set] in
-            var value = selfGet()
-            set(&value, $0)
-            selfSet(value)
-        }
-    }
+    var writable: (any WritableValueBinding<Value>)? { self }
     
     func map<Result>(get: @escaping (Value) -> Result, set: @escaping (Result) -> Value?) -> any WritableValueBinding<Result> {
         ClosureBinding<Result, (Result) -> Void> { [selfGet = self.get] in
@@ -271,6 +255,11 @@ extension ClosureBinding: WritableValueBinding where Set == (Value) -> Void {
         } set: { [selfSet = self.set] in
             set($0).map(selfSet)
         }
+    }
+    
+    func map<Result>(keyPath: WritableKeyPath<Value, Result>) -> any WritableValueBinding<Result> {
+        let kp: ReferenceWritableKeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
+        return KeyPathBinding(from: self, through: kp)
     }
 }
 
@@ -288,6 +277,8 @@ extension SwiftUI.Binding: WritableValueBinding {
         nonmutating set { self.wrappedValue = newValue }
     }
     
+    public var _writable: (any WritableValueBinding<Value>)? { self }
+    
     public var forSwiftUI: SwiftUI.Binding<Value> {
         self
     }
@@ -297,39 +288,53 @@ extension SwiftUI.Binding: WritableValueBinding {
     }
     
     public func map<Result>(keyPath: KeyPath<Value, Result>) -> any ValueBinding<Result> {
-        let kp: KeyPath<Self, Result> = (\Self.value).appending(path: keyPath)
-        return KeyPathBinding(from: self, through: kp)
+        if let keyPath = keyPath as? WritableKeyPath<Value, Result> {
+            return self[dynamicMember: keyPath]
+        } else {
+            return KeyPathBinding(from: self, through: (\Self.value).appending(path: keyPath)).normalized
+        }
+    }
+    
+    public func map<Result>(keyPath: WritableKeyPath<Value, Result>) -> any WritableValueBinding<Result> {
+        self[dynamicMember: keyPath]
     }
     
     @_disfavoredOverload
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (Result) -> Value?) -> any ValueBinding<Result> {
+    public func map<Result>(
+        get: @escaping (Value) -> Result,
+        set: @escaping (Result) -> Value?
+    ) -> any ValueBinding<Result> {
         ClosureBinding { get(self.value) } set: { set($0).map { self.value = $0 } }
     }
     
-    @_disfavoredOverload
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any ValueBinding<Result> {
-        ClosureBinding { get(self.value) } set: { set(&self.value, $0) }
-    }
-
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (Result) -> Value?) -> any WritableValueBinding<Result> {
-        self.map(get: get) { `var`, val in set(val).map { `var` = $0 } }
-    }
-
-    public func map<Result>(get: @escaping (Value) -> Result, set: @escaping (inout Value, Result) -> Void) -> any WritableValueBinding<Result> {
-        ClosureBinding { get(self.value) } set: { set(&self.value, $0) }
+    public func map<Result>(
+        get: @escaping (Value) -> Result,
+        set: @escaping (Result) -> Value?
+    ) -> any WritableValueBinding<Result> {
+        ClosureBinding { get(self.value) } set: { set($0).map { self.value = $0 } }
     }
 }
 
 // MARK: - Debugging
 
 extension ValueBinding {
-    func print(_ tag: String) -> any ValueBinding<Value> {
+    public func print(_ tag: String, describeValue: @escaping (Value) -> String = String.init(describing:)) -> any ValueBinding<Value> {
         return self.map {
-            Swift.print("\(tag) get: \($0)")
+            Swift.print("\(tag) get: \(describeValue($0))")
             return $0
         } set: {
-            Swift.print("\(tag) set: \($0) -> \($1)")
-            $0 = $1
+            Swift.print("\(tag) set: \(describeValue($0))")
+            return $0
         }
+    }
+}
+
+// MARK: - Misc
+
+private final class ValueBox<Value> {
+    var value: Value
+    
+    init(_ value: Value) {
+        self.value = value
     }
 }
