@@ -110,7 +110,7 @@ extension View {
 
 internal extension String {
     init(optionallyDescribing value: some Any) {
-        self = (value as? any _OptionalProtocol)?.normalized.flatMap(String.init(describing:)) ?? ""
+        self = (value as? any _OptionalProtocol)?.description ?? String.init(describing: value)
     }
 }
 

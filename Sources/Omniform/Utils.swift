@@ -159,6 +159,6 @@ public extension ValueBinding {
 internal extension String {
     @usableFromInline
     init(optionallyDescribing value: some Any) {
-        self = (value as? any _OptionalProtocol)?.normalized.flatMap(String.init(describing:)) ?? ""
+        self = (value as? any _OptionalProtocol)?.description ?? String(describing: value)
     }
 }
