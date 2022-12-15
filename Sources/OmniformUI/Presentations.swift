@@ -525,7 +525,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
     public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
         let swiftUIBinding: Binding<Value>
         if let dv = self.data.deselectionValue {
-            let mapped = binding.map { $0 } set: { $0 = $0 == $1 ? dv : $1 }
+            let mapped = binding.map { $0 } set: { binding.value == $0 ? dv : $0 }
             swiftUIBinding = mapped.forSwiftUI
         } else {
             swiftUIBinding = binding.forSwiftUI

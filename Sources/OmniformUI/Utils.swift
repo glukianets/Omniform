@@ -114,15 +114,6 @@ internal extension String {
     }
 }
 
-// MARK: - Optional
-
-internal extension Optional {
-    var forciblyUnwrapped: Wrapped {
-        get { self! }
-        set { self = .some(newValue) }
-    }
-}
-
 // MARK: - Metadata
 
 internal extension Metadata {
@@ -134,25 +125,80 @@ internal extension Metadata {
 // MARK: - WeakBox
 
 @dynamicMemberLookup
-internal struct WeakBox<Reference: AnyObject> {
-    weak var reference: Reference?
-    
-    public init(_ reference: Reference?) {
-        self.reference = reference
+internal enum RefBox<Reference: AnyObject> {
+    public struct Weak {
+        weak var value: Reference?
+        
+        public init(_ value: Reference?) {
+            self.value = value
+        }
     }
     
+    public struct Strong {
+        var value: Reference
+
+        public init(_ value: Reference) {
+            self.value = value
+        }
+    }
+    
+    public struct Unowned {
+        unowned var value: Reference
+
+        public init(_ value: Reference) {
+            self.value = value
+        }
+    }
+    
+    case weak(Weak)
+    case strong(Strong)
+    case unowned(Unowned)
+    
+    public var value: Reference! {
+        get {
+            switch self {
+            case .weak(let weak):
+                return weak.value
+            case .strong(let strong):
+                return strong.value
+            case .unowned(let unowned):
+                return unowned.value
+            }
+        }
+        set {
+            switch self {
+            case .weak:
+                self = .weak(.init(newValue))
+            case .strong:
+                self = .strong(.init(newValue))
+            case .unowned:
+                self = .unowned(.init(newValue))
+            }
+        }
+    }
+    
+    public static func weak(_ reference: Reference?) -> Self {
+        return .weak(.init(reference))
+    }
+    public static func strong(_ reference: Reference) -> Self {
+        return .strong(.init(reference))
+    }
+    public static func unowned(_ reference: Reference) -> Self {
+        return .unowned(.init(reference))
+    }
+        
     public subscript<R>(dynamicMember keyPath: KeyPath<Reference, R>) -> R! {
-        self.reference?[keyPath: keyPath]
+        self.value?[keyPath: keyPath]
     }
     
     public subscript<R>(dynamicMember keyPath: WritableKeyPath<Reference, R>) -> R! {
-        get { self.reference?[keyPath: keyPath] }
-        set { self.reference?[keyPath: keyPath] = newValue }
+        get { self.value?[keyPath: keyPath] }
+        set { self.value?[keyPath: keyPath] = newValue }
     }
     
     public subscript<R>(dynamicMember keyPath: ReferenceWritableKeyPath<Reference, R>) -> R! {
-        get { self.reference?[keyPath: keyPath] }
-        nonmutating set { self.reference?[keyPath: keyPath] = newValue }
+        get { self.value?[keyPath: keyPath] }
+        nonmutating set { self.value?[keyPath: keyPath] = newValue }
     }
 }
 

@@ -257,7 +257,7 @@ internal struct Decoupler {
         }
 
         public lazy var model: FormModel = {
-            let binding = bind(value: WeakBox(self), through: \.value.forciblyUnwrapped)
+            let binding = bind(value: RefBox.weak(self), through: \.value!.value)
             return FormModel(binding)
         }()
 
