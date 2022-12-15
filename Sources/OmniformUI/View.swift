@@ -40,7 +40,7 @@ public struct Omniform: View {
                 SplitNavigationView {
                     omniform
                 } detail: {
-                    Text("")
+                    Color.clear
                 }
             default:
                 omniform
