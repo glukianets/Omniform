@@ -16,5 +16,5 @@
 2. .display() presentations ✅
     - Formatters ✅
 3. Handle nested .section()-s ✅
-4. iPad support
+4. iPad support ✅
 5. Deeplinks
