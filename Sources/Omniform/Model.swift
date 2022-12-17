@@ -195,7 +195,7 @@ public struct FormModel {
                 through binding: some ValueBinding<Value>
             ) -> FormModel.Member? {
                 guard field.matches(query: self.query) else { return nil }
-                return .field(binding, metadata: field, ui: presentation)
+                return .field(metadata: field, ui: presentation, binding: binding)
             }
             
             func visit<Value>(
@@ -207,7 +207,7 @@ public struct FormModel {
                 (try? group.applying(transform: self)).map {
                     var model = $0
                     model.metadata = model.metadata.with(id: id)
-                    return .group(model: $0, ui: .section())
+                    return .group(ui: .section(), model: $0)
                 }
             }
         }
@@ -478,48 +478,74 @@ extension FormModel {
         fileprivate struct NoID: Hashable {
             // nothing
         }
-                
-        public static func group(
-            model: FormModel,
-            ui presentation: some GroupPresenting<FormModel> = .section()
+        
+        public static func group<T>(
+            metadata: Metadata,
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>,
+            @Builder _ builder: () -> Prototype
         ) -> Self {
             .group(
-                bind(value: model),
-                model: model,
-                ui: presentation
+                ui: presentation,
+                binding: binding,
+                model: FormModel(metadata: metadata, builder: builder)
             )
         }
         
         public static func group<T>(
+            id: AnyHashable? = nil,
+            name: Metadata.Text? = nil,
+            icon: Metadata.Image? = nil,
+            ui presentation: some GroupPresenting<T>,
             binding: any ValueBinding<T>,
-            ui presentation: some GroupPresenting<T>
+            @Builder _ builder: () -> Prototype
         ) -> Self {
-            .group(
-                binding,
-                model: FormModel(binding),
-                ui: presentation
+            self.group(
+                metadata: Metadata(type: T.self, id: id ?? .noId, name: name, icon: icon),
+                ui: presentation,
+                binding: binding,
+                builder
+            )
+        }
+        
+        public static func group<T>(
+            metadata: Metadata,
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>
+        ) -> Self {
+            groupRecord(presentation: presentation, binding: binding)
+                .member(metadata: metadata)
+        }
+        
+        public static func group<T>(
+            id: AnyHashable? = nil,
+            name: Metadata.Text? = nil,
+            icon: Metadata.Image? = nil,
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>
+        ) -> Self {
+            self.group(
+                metadata: .init(type: T.self, id: id ?? .noId, name: name, icon: icon),
+                ui: presentation,
+                binding: binding
             )
         }
         
         public static func group(
-            id: AnyHashable? = nil,
-            name: Metadata.Text? = nil,
-            icon: Metadata.Image? = nil,
-            ui presentation: Presentations.Group<FormModel> = .section(),
-            @Builder _ builder: () -> Prototype
+            ui presentation: some GroupPresenting<Void>,
+            model: FormModel
         ) -> Self {
-            let model = FormModel(id: id, name: name, icon: icon, builder: builder)
-            return .group(
-                bind(value: model),
-                model: model,
-                ui: presentation
+            .group(
+                ui: presentation,
+                binding: bind { Void() },
+                model: model
             )
         }
         
         public static func group<T>( // Designated
-            _ binding: any ValueBinding<T>,
-            model: FormModel,
-            ui presentation: some GroupPresenting<T>
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>,
+            model: FormModel
         ) -> Self {
             .init(representation: .group(
                 model,
@@ -529,50 +555,51 @@ extension FormModel {
         }
         
         public static func field<T>(
-            _ binding: any ValueBinding<T>,
+            id: AnyHashable? = nil,
             name: Metadata.Text? = nil,
             icon: Metadata.Image? = nil,
-            ui presentation: some FieldPresenting<T>
+            ui presentation: some FieldPresenting<T>,
+            binding: any ValueBinding<T>
         ) -> Self {
             .field(
-                binding,
-                metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
-                ui: presentation
+                metadata: Metadata(type: T.self, id: id ?? .noId, name: name, icon: icon),
+                ui: presentation,
+                binding: binding
             )
         }
         
         public static func field<T>(
-            _ binding: any ValueBinding<T>,
+            id: AnyHashable? = nil,
             name: Metadata.Text? = nil,
-            icon: Metadata.Image? = nil
+            icon: Metadata.Image? = nil,
+            binding: any ValueBinding<T>
         ) -> Self where T: CustomFieldPresentable {
             .field(
-                binding,
-                metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
-                ui: T.preferredPresentation
+                id: id,
+                name: name,
+                icon: icon,
+                ui: T.preferredPresentation,
+                binding: binding
             )
         }
         
         public static func field<T>( // Designated
-            _ binding: any ValueBinding<T>,
             metadata: Metadata,
-            ui presentation: any FieldPresenting<T>
+            ui presentation: any FieldPresenting<T>,
+            binding: any ValueBinding<T>
         ) -> Self {
-            .init(representation: .field(
-                metadata,
-                id: metadata.id,
-                ui: fieldRecord(presentation: presentation, binding: binding)
-            ))
+            fieldRecord(presentation: presentation, binding: binding)
+                .member(metadata: metadata)
         }
         
         public static func field<T>(
-            binding: any ValueBinding<T>,
-            metadata: Metadata
+            metadata: Metadata,
+            binding: any ValueBinding<T>
         ) -> Self where T: CustomFieldPresentable {
             .field(
-                binding,
                 metadata: metadata,
-                ui: T.preferredPresentation
+                ui: T.preferredPresentation,
+                binding: binding
             )
         }
 
@@ -613,7 +640,7 @@ extension FormModel {
         }
         
         public static func buildOptional(_ component: Prototype?) -> Prototype {
-            self.buildBlock()
+            component ?? self.buildBlock()
         }
         
         public static func buildEither(first component: Prototype) -> Prototype {
@@ -626,6 +653,10 @@ extension FormModel {
         
         public static func buildArray(_ components: [Prototype]) -> Prototype {
             Prototype(members: components.flatMap(\.members))
+        }
+        
+        public static func buildLimitedAvailability(_ component: Prototype) -> Prototype {
+            component
         }
     }
 }
@@ -710,5 +741,11 @@ extension FormModel.Guts: RandomAccessCollection & MutableCollection {
             }
             return try body(&bufferPtr)
         }
+    }
+}
+
+fileprivate extension AnyHashable {
+    static var noId: Self {
+        FormModel.Member.NoID()
     }
 }

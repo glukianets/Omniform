@@ -60,20 +60,14 @@ extension Presentations {
         public mutating func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
             var model = FormModel(binding)
             model.metadata = model.metadata.coalescing(with: metadata)
-
             guard case .section = self else { return model }
 
             self = .inline()
-            let result = FormModel(id: metadata.id) {
-                for submodel in GroupSectionFlattener().flatten(model) {
-                    .group(model: submodel, ui: .section())
-                }
-            }
-            return result
+            return try? model.applying(transform: GroupSectionFlattener())
         }
     }
     
-    fileprivate struct GroupSectionFlattener: FieldVisiting {
+    fileprivate struct GroupSectionFlattener: FormTransforming {
         enum Result {
             case one(FormModel.Member)
             case many([FormModel])
@@ -85,7 +79,7 @@ extension Presentations {
             using presentation: some FieldPresenting<Value>,
             through binding: some ValueBinding<Value>
         ) -> Result {
-            .one(.field(binding, metadata: field, ui: presentation))
+            .one(.field(metadata: field, ui: presentation, binding: binding))
         }
         
         func visit<Value>(
@@ -96,37 +90,47 @@ extension Presentations {
         ) -> Result {
             switch presentation as? Group<Value> {
             case nil, .screen:
-                return .one(.group(binding, model: group, ui: presentation))
+                return .one(.group(ui: presentation, binding: binding, model: group))
             case .section, .inline:
-                return .many(self.flatten(group))
+                return .many(self.flatten(metadata: group.metadata, fields: group.fields(using: self)))
             }
         }
         
-        func flatten(_ group: FormModel) -> [FormModel] {
-            let result = group.fields(using: self)
-            
-            let head: [FormModel.Member] = result.compactMap {
-                guard case .one(let field) = $0 else { return nil }
-                return field
-            }
-            
-            let tail: [FormModel] = result.flatMap {
-                switch $0 {
-                case .one:
-                    return [] as [FormModel]
-                case .many(let models):
-                    return models
+        func build(metadata: Metadata, fields: some Collection<Result>) throws -> FormModel {
+            let result = FormModel(id: metadata.id) {
+                for submodel in self.flatten(metadata: metadata, fields: fields) {
+                    .group(ui: .section(), model: submodel)
                 }
             }
-            
-            if tail.isEmpty {
-                return [group]
-            } else if head.isEmpty {
-                return tail
-            } else {
-                return [FormModel(metadata: group.metadata, prototype: .init(members: head))] + tail
-            }
+            return result
         }
+        
+        private func flatten(metadata: Metadata, fields: some Collection<Result>) -> [FormModel] {
+            return fields.group {
+                switch $0 {
+                case .one:
+                    return true
+                case .many:
+                    return false
+                }
+            }.flatMap { isInline, elements in
+                if isInline {
+                    return [FormModel(metadata: metadata) {
+                        for case let .one(field) in elements {
+                            field
+                        }
+                    }]
+                } else {
+                    return elements.flatMap {
+                        if case let .many(models) = $0 {
+                            return models
+                        } else {
+                            return []
+                        }
+                    }
+                }
+            }
+         }
     }
 }
 
@@ -212,23 +216,19 @@ extension Presentations {
     public enum TextInput<Value>: GroupPresenting {
         public typealias Value = Value
         
-        public enum Style {
-            case inline
-            case screen
-            case section
-            case custom(any GroupPresenting<Value>)
-        }
-       
         public struct Plain {
-            public internal(set) var style: Style
+            public internal(set) var ui: (any GroupPresenting<Value>)? = nil
             public internal(set) var prompt: Metadata.Text?
             private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
             
             @usableFromInline
-            internal init(style: Style = .screen, prompt: Metadata.Text? = nil)
+            internal init(
+                prompt: Metadata.Text? = nil,
+                ui: (some GroupPresenting<Value>)? = nil
+            )
             where Value: LosslessStringConvertible
             {
-                self.style = style
+                self.ui = ui
                 self.prompt = prompt
                 self.rebinder = { $0.map { $0.description } set: { Value($0) } }
             }
@@ -239,15 +239,18 @@ extension Presentations {
         }
         
         public struct Secure {
-            public internal(set) var style: Style
+            public internal(set) var ui: (any GroupPresenting<Value>)? = nil
             public internal(set) var prompt: Metadata.Text?
             private let rebinder: (any ValueBinding<Value>) -> any ValueBinding<String>
             
             @usableFromInline
-            internal init(style: Style = .screen, prompt: Metadata.Text? = nil)
+            internal init(
+                prompt: Metadata.Text? = nil,
+                ui: (some GroupPresenting<Value>)? = nil
+            )
             where Value: LosslessStringConvertible
             {
-                self.style = style
+                self.ui = ui
                 self.prompt = prompt
                 self.rebinder = { $0.map { $0.description } set: { Value($0) } }
             }
@@ -259,16 +262,16 @@ extension Presentations {
         
         public struct Format {
             public internal(set) var format: AnyParseableFormatStyle<Value, String>
-            public internal(set) var style: Style
+            public internal(set) var ui: (any GroupPresenting<Value>)?
             public internal(set) var prompt: Metadata.Text?
 
             @available(iOS 15.0, *)
             public init<F>(
                 format: F,
-                style: Style = .screen,
-                prompt: Metadata.Text? = nil
+                prompt: Metadata.Text? = nil,
+                ui: (some GroupPresenting<Value>)? = nil
             ) where F: ParseableFormatStyle, F.FormatInput == Value, F.FormatOutput == String {
-                self.style = style
+                self.ui = ui
                 self.prompt = prompt
                 self.format = .wrapping(format)
             }
@@ -279,48 +282,44 @@ extension Presentations {
         case format(Format)
         
         public mutating func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
-            let style: Style
-            let prompt: Metadata.Text?
+            var presentation: (any GroupPresenting<Value>)?
             switch self {
             case .plain(let content):
-                style = content.style
-                prompt = content.prompt
+                presentation = content.ui
             case .secure(let content):
-                style = content.style
-                prompt = content.prompt
+                presentation = content.ui
             case .format(let content):
-                style = content.style
-                prompt = content.prompt
+                presentation = content.ui
             }
             
-            switch style {
-            case .inline:
-                return nil
-            case .screen:
-                return FormModel(id: metadata.id, name: metadata.name, icon: metadata.icon) {
-                    .group(id: metadata.id, ui: .section(caption: prompt)) {
-                        .field(binding, metadata: metadata, ui: self)
-                    }
-                }
-            case .section:
-                return FormModel(id: metadata.id, name: metadata.name, icon: metadata.icon) {
-                    .field(binding, metadata: metadata, ui: self)
-                }
-            case .custom(var presentation):
-                defer {
-                    switch self {
-                    case .plain(var content):
-                        content.style = .custom(presentation)
-                        self = .plain(content)
-                    case .secure(var content):
-                        content.style = .custom(presentation)
-                        self = .secure(content)
-                    case .format(var content):
-                        content.style = .custom(presentation)
-                        self = .format(content)
-                    }
-                }
-                return presentation.makeForm(metadata: metadata, binding: binding)
+            guard let _ = presentation else { return nil }
+        
+            let next: Self
+            
+            switch self {
+            case .plain(var content):
+                content.ui = nil
+                next = .plain(content)
+            case .secure(var content):
+                content.ui = nil
+                next = .secure(content)
+            case .format(var content):
+                content.ui = nil
+                next = .format(content)
+            }
+
+            return FormModel(id: metadata.id, name: metadata.name, icon: metadata.icon) {
+                .field(metadata: metadata, ui: next, binding: binding)
+            }
+        }
+        
+        @usableFromInline
+        internal static func defaultFormat(secure: Bool) -> AnyFormatStyle<Value, String> {
+            if secure {
+                let defaultFormat: AnyFormatStyle<Value, String> = .default ?? .dynamic { _ in "" }
+                return .dynamic { defaultFormat.format($0).isEmpty ? "" : "⏺\u{fe0e}" }
+            } else {
+                return .dynamic(format: String.init(optionallyDescribing:))
             }
         }
     }
@@ -330,17 +329,32 @@ extension FieldPresenting where Value: LosslessStringConvertible {
     @inlinable
     public static func input<T>(
         secure: Bool = false,
-        presentation: Self.Style = .screen,
-        prompt: Metadata.Text? = nil
+        prompt: Metadata.Text? = nil,
+        ui presentation: some GroupPresenting<T>
     ) -> Self where
         Self == Presentations.TextInput<T>,
         Value == T
     {
         if secure {
-            return .secure(.init(style: presentation, prompt: prompt))
+            return .secure(.init(prompt: prompt, ui: presentation))
         } else {
-            return .plain(.init(style: presentation, prompt: prompt))
+            return .plain(.init(prompt: prompt, ui: presentation))
         }
+    }
+    
+    @inlinable
+    public static func input<T>(
+        secure: Bool = false,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
+        Self == Presentations.TextInput<T>,
+        Value == T
+    {
+        return self.input(
+            secure: secure,
+            prompt: prompt,
+            ui: Presentations.Group.screen(format: Self.defaultFormat(secure: secure))
+        )
     }
 }
 
@@ -348,17 +362,32 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
     @inlinable
     public static func input<T>(
         secure: Bool = false,
-        presentation: Self.Presentation.Style = .screen,
-        prompt: Metadata.Text? = nil
+        prompt: Metadata.Text? = nil,
+        ui presentation: some GroupPresenting<T>
     ) -> Self where
         Self == Presentations.Nullified<T.Wrapped, Presentations.TextInput<T>>,
         Value == T
     {
         if secure {
-            return .nullifying(.secure(.init(style: presentation, prompt: prompt)), when: "")
+            return .nullifying(.secure(.init(prompt: prompt, ui: presentation)), when: "")
         } else {
-            return .nullifying(.plain(.init(style: presentation, prompt: prompt)), when: "")
+            return .nullifying(.plain(.init(prompt: prompt, ui: presentation)), when: "")
         }
+    }
+    
+    @inlinable
+    public static func input<T>(
+        secure: Bool = false,
+        prompt: Metadata.Text? = nil
+    ) -> Self where
+        Self == Presentations.Nullified<T.Wrapped, Presentations.TextInput<T>>,
+        Value == T
+    {
+        return self.input(
+            secure: secure,
+            prompt: prompt,
+            ui: .screen(format: Presentations.TextInput<T>.defaultFormat(secure: secure))
+        )
     }
 }
 
@@ -367,14 +396,27 @@ extension FieldPresenting {
     @available(iOS 15.0, *)
     public static func input<F>(
         format: F,
-        presentation: Self.Style = .screen,
+        prompt: Metadata.Text? = nil,
+        ui presentation: some GroupPresenting<F.FormatInput>
+    ) -> Self where
+        F: ParseableFormatStyle,
+        F.FormatOutput == String,
+        Self == Presentations.TextInput<F.FormatInput>
+    {
+        .format(.init(format: format, prompt: prompt, ui: presentation))
+    }
+    
+    @inlinable
+    @available(iOS 15.0, *)
+    public static func input<F>(
+        format: F,
         prompt: Metadata.Text? = nil
     ) -> Self where
         F: ParseableFormatStyle,
         F.FormatOutput == String,
         Self == Presentations.TextInput<F.FormatInput>
     {
-        .format(.init(format: format, style: presentation, prompt: prompt))
+        self.input(format: format, prompt: prompt, ui: .screen(format: .wrapping(format)))
     }
 }
 
@@ -383,8 +425,8 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
     @available(iOS 15.0, *)
     public static func input<T, F>(
         format: F,
-        presentation: Self.Presentation.Style = .screen,
-        prompt: Metadata.Text? = nil
+        prompt: Metadata.Text? = nil,
+        ui presentation: some GroupPresenting<T>
     ) -> Self where
         Self == Presentations.Nullified<T.Wrapped, Presentations.TextInput<T>>,
         Value == T,
@@ -392,7 +434,7 @@ extension FieldPresenting where Value: _OptionalProtocol, Value.Wrapped: StringP
         F.FormatInput == T.Wrapped,
         F.FormatOutput == String
     {
-        .nullifying(.format(.init(format: format, style: presentation, prompt: prompt)), when: "")
+        .nullifying(.format(.init(format: format, prompt: prompt, ui: presentation)), when: "")
     }
 }
 
@@ -487,20 +529,19 @@ extension Presentations {
     public enum Picker<Value>: GroupPresenting where Value: Hashable {
         public struct Style {
             fileprivate enum Represenation {
-                case auto, segments, selection(Group<Value>), wheel, menu
+                case auto, segments, selection((any GroupPresenting<Value>)?), wheel, menu
             }
 
             public static var auto: Self { Self(representation: .auto) }
             public static var segments: Self { Self(representation: .segments) }
             public static var wheel: Self { Self(representation: .wheel) }
             public static var selection: Self {
-                Self(representation: .selection(.screen(format: .default ?? .dynamic(format: String.init(optionallyDescribing:)))))
+                Self(representation: .selection(Presentations.Group.screen(format: .default ?? .dynamic(format: String.init(optionallyDescribing:)))))
             }
             public static func selection(_ presentation: Group<Value>) -> Self {
                 Self(representation: .selection(presentation))
             }
 
-            @available(iOS 14.0, *)
             public static var menu: Self { Self(representation: .menu) }
         
             fileprivate let representation: Represenation
@@ -562,12 +603,13 @@ extension Presentations {
 
         public func makeForm(metadata: Metadata, binding: some ValueBinding<Value>) -> FormModel? {
             guard case .selection(let content) = self else { return nil }
-            if let group = content.presentation as? Group<Value>, case .inline = group { return nil }
-            return .init(id: metadata.id, name: metadata.name, icon: metadata.icon) {
+            guard let presentation = content.presentation else { return nil }
+            if let group = presentation as? Group<Value>, case .inline = group { return nil }
+            return .init(metadata: metadata) {
                 .field(
-                    binding,
                     metadata: metadata,
-                    ui: Picker.selection(.init(data: self.data, presentation: nil))
+                    ui: Picker.selection(.init(data: self.data, presentation: nil)),
+                    binding: binding
                 )
             }
         }
@@ -636,24 +678,47 @@ extension FieldPresenting where Value: Hashable {
     @inlinable
     public static func picker<T>(
         style: Presentations.Picker<T>.Style = .auto,
-        cases: Value...
+        cases head: Value, _ tail: Value...
     ) -> Self where
         Self == Presentations.Picker<T>,
         T == Value
     {
-        .init(style: style, values: cases, deselectionValue: nil)
+        .init(style: style, values: [head] + tail, deselectionValue: nil)
     }
 
     @inlinable
     public static func picker<T>(
         style: Presentations.Picker<T>.Style = .auto,
-        cases: Value...,
+        cases head: Value, _ tail: Value...,
         deselectUsing value: Value
     ) -> Self where
         Self == Presentations.Picker<T>,
         T == Value
     {
-        .init(style: style, values: cases, deselectionValue: value)
+        .init(style: style, values: [head] + tail, deselectionValue: value)
+    }
+    
+    @inlinable
+    public static func picker<T>(
+        style: Presentations.Picker<T>.Style = .auto,
+        cases: some Sequence<Value>
+    ) -> Self where
+        Self == Presentations.Picker<T>,
+        T == Value
+    {
+        .init(style: style, values: Array(cases), deselectionValue: nil)
+    }
+
+    @inlinable
+    public static func picker<T>(
+        style: Presentations.Picker<T>.Style = .auto,
+        cases: some Sequence<Value>,
+        deselectUsing value: Value
+    ) -> Self where
+        Self == Presentations.Picker<T>,
+        T == Value
+    {
+        .init(style: style, values: Array(cases), deselectionValue: value)
     }
 }
 
@@ -954,7 +1019,8 @@ extension Presentations {
             if let group = self.groupPresentation as? Presentations.Group<Value>, case .inline = group { return nil }
 
             return FormModel(metadata: metadata) {
-                .field(binding, metadata: metadata, ui: self.fieldPresentation)
+                .field(metadata: metadata, ui: self.fieldPresentation, binding: binding
+                )
             }
         }
     }

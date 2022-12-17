@@ -1,5 +1,11 @@
 import Foundation
 
+// MARK: - Bool
+
+internal extension Bool {
+    var not: Bool { !self } // Yes, I'm serious
+}
+
 // MARK: - String
 
 internal extension StringProtocol {
@@ -30,7 +36,7 @@ internal extension StringProtocol {
 
 // MARK: - Sequence
 
-private extension Sequence {
+internal extension Sequence {
     func split(when predicate: (Element, Element) throws -> Bool) rethrows -> [[Element]] {
         guard let first = self.first(where: { _ in true }) else { return [] }
         var result: [[Element]] = []

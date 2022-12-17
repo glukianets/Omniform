@@ -67,7 +67,7 @@ extension FormTransforming {
     }
 }
 
-// MARK: - CustomFieldsContaining
+// MARK: - CustomFormPresentable
 
 /// A type that has customized ``FormModel`` representatoin
 public protocol CustomFormPresentable: CustomFieldPresentable {
@@ -87,7 +87,7 @@ extension CustomFormPresentable where Self: CustomFormBuilding {
     }
 }
 
-// MARK: - CustomFieldsBuilding
+// MARK: - CustomFormBuilding
 
 /// A type that builds its own custom ``FormModel`` representation
 ///
