@@ -63,74 +63,8 @@ extension Presentations {
             guard case .section = self else { return model }
 
             self = .inline()
-            return try? model.applying(transform: GroupSectionFlattener())
+            return try? model.applying(transform: Transforms.GroupFlattener())
         }
-    }
-    
-    fileprivate struct GroupSectionFlattener: FormTransforming {
-        enum Result {
-            case one(FormModel.Member)
-            case many([FormModel])
-        }
-        
-        func visit<Value>(
-            field: Metadata,
-            id: AnyHashable,
-            using presentation: some FieldPresenting<Value>,
-            through binding: some ValueBinding<Value>
-        ) -> Result {
-            .one(.field(metadata: field, ui: presentation, binding: binding))
-        }
-        
-        func visit<Value>(
-            group: FormModel,
-            id: AnyHashable,
-            using presentation: some GroupPresenting<Value>,
-            through binding: some ValueBinding<Value>
-        ) -> Result {
-            switch presentation as? Group<Value> {
-            case nil, .screen:
-                return .one(.group(ui: presentation, binding: binding, model: group))
-            case .section, .inline:
-                return .many(self.flatten(metadata: group.metadata, fields: group.fields(using: self)))
-            }
-        }
-        
-        func build(metadata: Metadata, fields: some Collection<Result>) throws -> FormModel {
-            let result = FormModel(id: metadata.id) {
-                for submodel in self.flatten(metadata: metadata, fields: fields) {
-                    .group(ui: .section(), model: submodel)
-                }
-            }
-            return result
-        }
-        
-        private func flatten(metadata: Metadata, fields: some Collection<Result>) -> [FormModel] {
-            return fields.group {
-                switch $0 {
-                case .one:
-                    return true
-                case .many:
-                    return false
-                }
-            }.flatMap { isInline, elements in
-                if isInline {
-                    return [FormModel(metadata: metadata) {
-                        for case let .one(field) in elements {
-                            field
-                        }
-                    }]
-                } else {
-                    return elements.flatMap {
-                        if case let .many(models) = $0 {
-                            return models
-                        } else {
-                            return []
-                        }
-                    }
-                }
-            }
-         }
     }
 }
 

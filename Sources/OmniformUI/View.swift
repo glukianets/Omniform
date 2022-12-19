@@ -41,7 +41,7 @@ public struct Omniform: View {
     @ViewBuilder
     func master(model: FormModel) -> some View {
         if #available(iOS 15, macOS 12, *), !self.query.isEmpty {
-            if let model = model.filtered(using: self.query) {
+            if let model = try? model.applying(transform: Transforms.QueryTransform(query: self.query)) {
                 self.omniform(model: model)
             } else {
                 Text("Nothing found")

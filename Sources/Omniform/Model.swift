@@ -170,51 +170,7 @@ public struct FormModel {
     public func applying(transform: some FormTransforming) throws -> Self {
         try transform.build(metadata: self.metadata, fields: self.fields(using: transform))
     }
-    
-    /// Filters a form to match seqrch query
-    /// - Parameter query: string to match with lose text search
-    /// - Returns: a derived form that only contains matching members or nil if nothing was found
-    public func filtered(using query: String) -> Self? {
-        guard !query.isEmpty else { return self }
 
-        struct QueryTransform: FormTransforming {
-            typealias Result = FormModel.Member?
-            struct ModelDoesNotMatchError: Error {}
-
-            var query: String
-            
-            func build(metadata: Metadata, fields: some Collection<Result>) throws -> FormModel {
-                guard !fields.isEmpty else { throw ModelDoesNotMatchError() }
-                return FormModel(metadata: metadata, members: fields.compactMap { $0 })
-            }
-
-            func visit<Value>(
-                field: Metadata,
-                id: AnyHashable,
-                using presentation: some FieldPresenting<Value>,
-                through binding: some ValueBinding<Value>
-            ) -> FormModel.Member? {
-                guard field.matches(query: self.query) else { return nil }
-                return .field(metadata: field, ui: presentation, binding: binding)
-            }
-            
-            func visit<Value>(
-                group: FormModel,
-                id: AnyHashable,
-                using presentation: some GroupPresenting<Value>,
-                through binding: some ValueBinding<Value>
-            ) -> FormModel.Member? {
-                (try? group.applying(transform: self)).map {
-                    var model = $0
-                    model.metadata = model.metadata.with(id: id)
-                    return .group(ui: .section(), model: $0)
-                }
-            }
-        }
-        
-        return try? self.applying(transform: QueryTransform(query: query))
-    }
-    
     private mutating func ensureUniqueness() {
         guard !isKnownUniquelyReferenced(&self.guts) else { return }
         self = Self.init(guts: self.guts.clone())
@@ -384,14 +340,6 @@ private extension FieldProtocol {
 
         return fieldRecord(presentation: value.presentation, binding: wrappedValueBinding)
             .member(metadata: value.metadata.with(id: keyPath, externalName: name))
-    }
-}
-
-// MARK: - Searching
-
-extension Metadata {
-    fileprivate func matches(query: String) -> Bool {
-        return self.name?.description.localizedStandardContains(query) ?? false
     }
 }
 

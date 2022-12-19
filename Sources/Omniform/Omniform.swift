@@ -41,12 +41,10 @@ public protocol FieldVisiting<Result> {
 
 // MARK: - FormTransforming
 
-/// A type that presents ``FormModel`` members in a uniform manner
+/// A type that applies certain transformations to ``FormModel``
 ///
 /// See ``FormModel/applying(tranform:)`` for usage.
-public protocol FormTransforming<Result>: FieldVisiting {
-    associatedtype Result
-   
+public protocol FormTransforming: FieldVisiting {
     func build(metadata: Metadata, fields: some Collection<Result>) throws -> FormModel
 }
 
