@@ -155,7 +155,7 @@ extension Presentations.Nullified: SwiftUIFieldPresenting where Presentation: Sw
         switch self {
         case .matching(let content):
             let binding = binding.map {
-                $0._optional ?? content.nilValue
+                $0.normalized ?? content.nilValue
             } set: {
                 $0 == content.nilValue ? .some(nil) : .some($0)
             }
@@ -346,32 +346,23 @@ extension Presentations.TextInput: SwiftUIFieldPresenting, SwiftUIGroupPresentin
     }
     
     public func body<R>(for model: FormModel, binding: some ValueBinding<Value>, builder: some FieldVisiting<R>) -> [R] {
-        let style: Style
-        let format: AnyFormatStyle<Value, String>?
+        let presentation: (any GroupPresenting<Value>)?
         switch self {
         case .plain(let content):
-            style = content.style
-            format = .default
+            presentation = content.ui
         case .secure(let content):
-            style = content.style
-            let defaultFormat: AnyFormatStyle<Value, String> = .default ?? .dynamic { _ in "" }
-            format = .dynamic { defaultFormat.format($0).isEmpty ? "" : "⏺\u{fe0e}" }
+            presentation = content.ui
         case .format(let content):
-            style = content.style
-            format = .default
+            presentation = content.ui
         }
-        
-        switch style {
-        case .inline:
-            fatalError("unreachable")
-        case .screen:
-            return Presentations.Group<Value>.screen(format: format).body(for: model, binding: binding, builder: builder)
-        case .section:
-            return Presentations.Group<Value>.section().body(for: model, binding: binding, builder: builder)
-        case .custom(let presentation):
+
+        if let presentation {
             guard let dd = dispatch(presentation: presentation, binding: binding) as? GroupViewBuilding else { return [] }
             return dd.build(model: model, id: model.metadata.id, builder: builder)
+        } else {
+            fatalError("unreachable")
         }
+        
     }
 }
 
@@ -415,7 +406,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
                 self.selection = self.selection != self.value ? self.value : nil
             } label: {
                 HStack {
-                    Text(String(optionalyDescribing: self.value))
+                    Text(String(optionallyDescribing: self.value))
                         .foregroundColor(.primary)
                     Spacer()
                     if self.selection == self.value {
@@ -478,7 +469,7 @@ extension Presentations.Picker: SwiftUIFieldPresenting, SwiftUIGroupPresenting {
         var body: some View {
             let picker = SwiftUI.Picker(selection: binding) {
                 ForEach(presentation.data.values, id: \.self) { item in
-                    Text(String(optionalyDescribing: item))
+                    Text(String(optionallyDescribing: item))
                 }
             } label: {
                 MetadataLabel(field, value: binding)

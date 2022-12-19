@@ -19,33 +19,50 @@ public struct Omniform: View {
     
     public var body: some View {
         self.decoupler.body { model in
-            let omniform = OmniformView(model: model)
-                .omniformPresentation(self.presentationKind)
-                .navigationBarItems(leading: self.leadingNavigationItems)
-                .modify { content in
-                    if #available(iOS 15.0, *) {
-                        content
-                            .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
-                    } else {
-                        content
-                    }
-                }
+            let master = self.master(model: model)
             
             switch self.presentationKind {
             case .stack:
                 NavigationView {
-                    omniform
+                    master
                 }.navigationViewStyle(.stack)
             case .split:
                 SplitNavigationView {
-                    omniform
+                    master
                 } detail: {
                     Color.clear
                 }
             default:
-                omniform
+                master
             }
         }
+    }
+    
+    @ViewBuilder
+    func master(model: FormModel) -> some View {
+        if #available(iOS 15, macOS 12, *), !self.query.isEmpty {
+            if let model = try? model.applying(transform: Transforms.QueryTransform(query: self.query)) {
+                self.omniform(model: model)
+            } else {
+                Text("Nothing found")
+            }
+        } else {
+            self.omniform(model: model)
+        }
+    }
+    
+    func omniform(model: FormModel) -> some View {
+        OmniformView(model: model)
+            .omniformPresentation(self.presentationKind)
+            .navigationBarItems(leading: self.leadingNavigationItems)
+            .modify { content in
+                if #available(iOS 15.0, *) {
+                    content
+                        .searchable(text: self.$query, placement: .navigationBarDrawer(displayMode: .automatic))
+                } else {
+                    content
+                }
+            }
     }
     
     private var presentationKind: OmniformPresentation {

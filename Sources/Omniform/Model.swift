@@ -10,7 +10,7 @@ public struct FormModel {
         public static var excludeUnmarked = Self(rawValue: 1 << 0)
         
         public var rawValue: UInt
-
+        
         public init(rawValue: UInt) {
             self.rawValue = rawValue
         }
@@ -52,8 +52,12 @@ public struct FormModel {
     private static let cache = MirrorCache()
     
     /// This form's metadata
-    public var metadata: Metadata
-    private var members: [Record]
+    public var metadata: Metadata {
+        get { self.guts.header.metadata }
+        set { self.ensureUniqueness(); self.guts.header.metadata = newValue }
+    }
+
+    private var guts: Guts
     
     /// Builds a new model instance using convenient resultBuilder-based syntax
     ///
@@ -129,13 +133,15 @@ public struct FormModel {
         self = .init(metadata: metadata, members: prototype.members)
     }
 
-    private init(metadata: Metadata, members: [Member]) {
-        self.init(metadata: metadata, records: members.enumerated().map { i, m in m.with(id: i) }.map(\.representation))
+    private init(metadata: Metadata, members: some Sequence<Member>) {
+        self.init(guts: .create(
+            metadata: metadata.with(id: metadata.id is Member.NoID ? UUID() : metadata.id),
+            members: members.enumerated().map { i, m in m.with(id: i) }.map(\.representation)
+        ))
     }
     
-    private init(metadata: Metadata, records: [Record]) {
-        self.metadata = metadata.with(id: metadata.id is Member.NoID ? UUID() : metadata.id)
-        self.members = records
+    private init(guts: Guts) {
+        self.guts = guts
     }
     
     /// Builds a collection of form fields elements
@@ -147,7 +153,7 @@ public struct FormModel {
     /// - Parameter visitor: visitor that builds elements from provided form fields
     /// - Returns: a collection of elements built from this form's fields
     public func fields<Visitor: FieldVisiting>(using visitor: Visitor) -> some RandomAccessCollection<Visitor.Result> {
-        self.members.lazy.map { record in
+        self.guts.lazy.map { record in
             switch record {
             case .group(let model, id: let id, ui: let trampoline):
                 return trampoline.visit(group: model, id: id, builder: visitor)
@@ -157,28 +163,17 @@ public struct FormModel {
         }
     }
     
-    /// Filters a form to match seqrch query
-    /// - Parameter query: string to match with lose text search
-    /// - Returns: a derived form that only contains matching members or nil if nothing was found
-    public func filtered(using query: String) -> Self? {
-        guard !query.isEmpty else { return self }
+    /// Creates a new form applying transform
+    ///
+    /// - Parameter transform: object that builds form fields and, subsequentially, the entire form.
+    /// - Returns: a new form
+    public func applying(transform: some FormTransforming) throws -> Self {
+        try transform.build(metadata: self.metadata, fields: self.fields(using: transform))
+    }
 
-        return .init(metadata: self.metadata, records: self.members.compactMap {
-            switch $0 {
-            case .field(let metadata, id: _, ui: _) where metadata.matches(query: query):
-                return $0
-            case .group(let model, id: let id, ui: _):
-                return model.filtered(using: query).flatMap {
-                    !$0.members.isEmpty ? FormModel.Member.group(
-                        bind(value: $0),
-                        model: $0,
-                        ui: Presentations.Group<FormModel>.section()
-                    ).with(id: id).representation : nil
-                }
-            default:
-                return nil
-            }
-        })
+    private mutating func ensureUniqueness() {
+        guard !isKnownUniquelyReferenced(&self.guts) else { return }
+        self = Self.init(guts: self.guts.clone())
     }
 }
 
@@ -233,7 +228,7 @@ extension FormModel: CustomDebugStringConvertible {
             return fields.isEmpty ? nil : fields.joined(separator: ", ")
         }
         
-        let members = self.members.map { record in
+        let members = self.guts.map { record in
             switch record {
             case let .field(metadata, id: _, ui: ui):
                 return """
@@ -348,14 +343,6 @@ private extension FieldProtocol {
     }
 }
 
-// MARK: - Searching
-
-extension Metadata {
-    fileprivate func matches(query: String) -> Bool {
-        return self.name?.description.localizedStandardContains(query) ?? false
-    }
-}
-
 // MARK: - Cache
 
 private final class MirrorCache {
@@ -404,8 +391,8 @@ extension FormModel {
         
         /// Create instance directly from members
         /// - Parameter members: members
-        public init(members: [Member]) {
-            self.members = members
+        public init(members: some Collection<Member>) {
+            self.members = Array(members)
         }
         
         /// Create instace by inspecting the contents of provided binding
@@ -439,48 +426,74 @@ extension FormModel {
         fileprivate struct NoID: Hashable {
             // nothing
         }
-                
-        public static func group(
-            model: FormModel,
-            ui presentation: some GroupPresenting<FormModel> = .section()
+        
+        public static func group<T>(
+            metadata: Metadata,
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>,
+            @Builder _ builder: () -> Prototype
         ) -> Self {
             .group(
-                bind(value: model),
-                model: model,
-                ui: presentation
+                ui: presentation,
+                binding: binding,
+                model: FormModel(metadata: metadata, builder: builder)
             )
         }
         
         public static func group<T>(
+            id: AnyHashable? = nil,
+            name: Metadata.Text? = nil,
+            icon: Metadata.Image? = nil,
+            ui presentation: some GroupPresenting<T>,
             binding: any ValueBinding<T>,
-            ui presentation: some GroupPresenting<T>
+            @Builder _ builder: () -> Prototype
         ) -> Self {
-            .group(
-                binding,
-                model: FormModel(binding),
-                ui: presentation
+            self.group(
+                metadata: Metadata(type: T.self, id: id ?? .noId, name: name, icon: icon),
+                ui: presentation,
+                binding: binding,
+                builder
+            )
+        }
+        
+        public static func group<T>(
+            metadata: Metadata,
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>
+        ) -> Self {
+            groupRecord(presentation: presentation, binding: binding)
+                .member(metadata: metadata)
+        }
+        
+        public static func group<T>(
+            id: AnyHashable? = nil,
+            name: Metadata.Text? = nil,
+            icon: Metadata.Image? = nil,
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>
+        ) -> Self {
+            self.group(
+                metadata: .init(type: T.self, id: id ?? .noId, name: name, icon: icon),
+                ui: presentation,
+                binding: binding
             )
         }
         
         public static func group(
-            id: AnyHashable? = nil,
-            name: Metadata.Text? = nil,
-            icon: Metadata.Image? = nil,
-            ui presentation: Presentations.Group<FormModel> = .section(),
-            @Builder _ builder: () -> Prototype
+            ui presentation: some GroupPresenting<Void>,
+            model: FormModel
         ) -> Self {
-            let model = FormModel(id: id, name: name, icon: icon, builder: builder)
-            return .group(
-                bind(value: model),
-                model: model,
-                ui: presentation
+            .group(
+                ui: presentation,
+                binding: bind { Void() },
+                model: model
             )
         }
         
         public static func group<T>( // Designated
-            _ binding: any ValueBinding<T>,
-            model: FormModel,
-            ui presentation: some GroupPresenting<T>
+            ui presentation: some GroupPresenting<T>,
+            binding: any ValueBinding<T>,
+            model: FormModel
         ) -> Self {
             .init(representation: .group(
                 model,
@@ -490,50 +503,51 @@ extension FormModel {
         }
         
         public static func field<T>(
-            _ binding: any ValueBinding<T>,
+            id: AnyHashable? = nil,
             name: Metadata.Text? = nil,
             icon: Metadata.Image? = nil,
-            ui presentation: some FieldPresenting<T>
+            ui presentation: some FieldPresenting<T>,
+            binding: any ValueBinding<T>
         ) -> Self {
             .field(
-                binding,
-                metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
-                ui: presentation
+                metadata: Metadata(type: T.self, id: id ?? .noId, name: name, icon: icon),
+                ui: presentation,
+                binding: binding
             )
         }
         
         public static func field<T>(
-            _ binding: any ValueBinding<T>,
+            id: AnyHashable? = nil,
             name: Metadata.Text? = nil,
-            icon: Metadata.Image? = nil
+            icon: Metadata.Image? = nil,
+            binding: any ValueBinding<T>
         ) -> Self where T: CustomFieldPresentable {
             .field(
-                binding,
-                metadata: Metadata(type: T.self, id: NoID(), name: name, icon: icon),
-                ui: T.preferredPresentation
+                id: id,
+                name: name,
+                icon: icon,
+                ui: T.preferredPresentation,
+                binding: binding
             )
         }
         
         public static func field<T>( // Designated
-            _ binding: any ValueBinding<T>,
             metadata: Metadata,
-            ui presentation: any FieldPresenting<T>
+            ui presentation: any FieldPresenting<T>,
+            binding: any ValueBinding<T>
         ) -> Self {
-            .init(representation: .field(
-                metadata,
-                id: metadata.id,
-                ui: fieldRecord(presentation: presentation, binding: binding)
-            ))
+            fieldRecord(presentation: presentation, binding: binding)
+                .member(metadata: metadata)
         }
         
         public static func field<T>(
-            binding: any ValueBinding<T>,
-            metadata: Metadata
+            metadata: Metadata,
+            binding: any ValueBinding<T>
         ) -> Self where T: CustomFieldPresentable {
             .field(
-                binding,
                 metadata: metadata,
-                ui: T.preferredPresentation
+                ui: T.preferredPresentation,
+                binding: binding
             )
         }
 
@@ -574,7 +588,7 @@ extension FormModel {
         }
         
         public static func buildOptional(_ component: Prototype?) -> Prototype {
-            self.buildBlock()
+            component ?? self.buildBlock()
         }
         
         public static func buildEither(first component: Prototype) -> Prototype {
@@ -588,5 +602,98 @@ extension FormModel {
         public static func buildArray(_ components: [Prototype]) -> Prototype {
             Prototype(members: components.flatMap(\.members))
         }
+        
+        public static func buildLimitedAvailability(_ component: Prototype) -> Prototype {
+            component
+        }
+    }
+}
+
+// MARK: - FormModelGuts
+
+extension FormModel {
+    fileprivate final class Guts: ManagedBuffer<Guts.Header, Record> {
+        public struct Header {
+            var count: Int
+            var metadata: Metadata
+        }
+        
+        public static func create(metadata: Metadata, members: some Collection<Record>) -> Self {
+            let buffer = Self.create(minimumCapacity: members.count) { _ in
+                Header(count: 0, metadata: metadata)
+            } as! Self
+            
+            buffer.append(members)
+            
+            return buffer
+        }
+        
+        deinit {
+            self.withUnsafeMutablePointers { headerPtr, bodyPtr in
+                _ = bodyPtr.deinitialize(count: headerPtr.pointee.count)
+            }
+        }
+        
+        public func append(_ members: some Collection<Record>) {
+            assert(self.capacity >= self.header.count + members.count, "No capacity left")
+            
+            self.header.count += members.count
+            
+            self.withUnsafeMutablePointerToElements { bodyPtr in
+                guard members.withContiguousStorageIfAvailable({ buffer in
+                    bodyPtr.initialize(from: buffer.baseAddress!, count: buffer.count)
+                }) == nil else { return }
+                
+                members.enumerated().forEach { i, e in (bodyPtr + i).initialize(to: e) }
+            }
+        }
+        
+        public func clone() -> Self {
+            Self.create(metadata: self.header.metadata, members: self)
+        }
+    }
+}
+
+extension FormModel.Guts: RandomAccessCollection & MutableCollection {
+    typealias Element = FormModel.Record
+    typealias Index = Int
+
+    var startIndex: Int { 0 }
+    var endIndex: Int { self.header.count }
+
+    subscript(position: Int) -> FormModel.Record {
+        get {
+            assert(self.indices.contains(position), "Index \(position) is out of range \(self.indices)")
+            return self.withUnsafeMutablePointerToElements { ($0 + position).pointee }
+        }
+        set {
+            assert(self.indices.contains(position), "Index \(position) is out of range \(self.indices)")
+            return self.withUnsafeMutablePointerToElements { ($0 + position).pointee = newValue }
+        }
+    }
+    
+    func withContiguousStorageIfAvailable<R>(
+        _ body: (UnsafeBufferPointer<FormModel.Record>) throws -> R
+    ) rethrows -> R? {
+        try self.withUnsafeMutablePointers { headerPtr, bodyPtr in
+            try body(UnsafeBufferPointer(start: bodyPtr, count: headerPtr.pointee.count))
+        }
+    }
+    
+    func withContiguousMutableStorageIfAvailable<R>(
+        _ body: (inout UnsafeMutableBufferPointer<FormModel.Record>) throws -> R
+    ) rethrows -> R? {
+        try self.withUnsafeMutablePointers { headerPtr, bodyPtr in
+            var bufferPtr = UnsafeMutableBufferPointer(start: bodyPtr, count: headerPtr.pointee.count) {
+                didSet { assertionFailure("Buffer must not be replaced") }
+            }
+            return try body(&bufferPtr)
+        }
+    }
+}
+
+fileprivate extension AnyHashable {
+    static var noId: Self {
+        FormModel.Member.NoID()
     }
 }

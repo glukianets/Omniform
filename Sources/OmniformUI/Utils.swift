@@ -109,8 +109,8 @@ extension View {
 // MARK: - String
 
 internal extension String {
-    init<Subject>(optionalyDescribing value: Subject) {
-        self = (value as? Any?)?.flatMap { String(describing: $0) } ?? ""
+    init(optionallyDescribing value: some Any) {
+        self = (value as? any _OptionalProtocol)?.description ?? String.init(describing: value)
     }
 }
 

@@ -39,7 +39,33 @@ public protocol FieldVisiting<Result> {
     ) -> Result
 }
 
-// MARK: - CustomFieldsContaining
+// MARK: - FormTransforming
+
+/// A type that applies certain transformations to ``FormModel``
+///
+/// See ``FormModel/applying(tranform:)`` for usage.
+public protocol FormTransforming: FieldVisiting {
+    func build(metadata: Metadata, fields: some Collection<Result>) throws -> FormModel
+}
+
+extension FormTransforming {
+    public func build(metadata: Metadata, fields: some Collection<Result>) -> FormModel
+    where Result == FormModel.Member {
+        FormModel(metadata: metadata, prototype: .init(members: fields))
+    }
+    
+    public func build(metadata: Metadata, fields: some Collection<Result>) -> FormModel
+    where Result: Collection<FormModel.Member> {
+        FormModel(metadata: metadata, prototype: .init(members: fields.flatMap { $0 }))
+    }
+    
+    public func build(metadata: Metadata, fields: some Collection<Result>) -> FormModel
+    where Result == FormModel.Member? {
+        FormModel(metadata: metadata, prototype: .init(members: fields.compactMap { $0 }))
+    }
+}
+
+// MARK: - CustomFormPresentable
 
 /// A type that has customized ``FormModel`` representatoin
 public protocol CustomFormPresentable: CustomFieldPresentable {
@@ -59,7 +85,7 @@ extension CustomFormPresentable where Self: CustomFormBuilding {
     }
 }
 
-// MARK: - CustomFieldsBuilding
+// MARK: - CustomFormBuilding
 
 /// A type that builds its own custom ``FormModel`` representation
 ///

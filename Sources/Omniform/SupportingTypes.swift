@@ -327,8 +327,8 @@ extension AnyFormatStyle {
     public static func wrapping<F>(_ f: F) -> AnyFormatStyle<FormatInput, FormatOutput>
     where F: FormatStyle, F.FormatInput == FormatInput, F.FormatOutput == FormatOutput
     {
-        func erase<F: ParseableFormatStyle>(_ format: F) -> Any {
-            AnyParseableFormatStyle.wrapping(f)
+        func erase<F: ParseableFormatStyle>(_ f: F) -> Any {
+            AnyParseableFormatStyle<F.FormatInput, F.FormatOutput>.wrapping(f)
         }
        
         if let parseable = f as? any ParseableFormatStyle {
