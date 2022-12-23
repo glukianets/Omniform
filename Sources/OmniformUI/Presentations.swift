@@ -683,3 +683,92 @@ where
         }.erased
     }
 }
+
+// MARK: Color
+
+private struct ColorPickerView: View {
+    @Binding var color: Color
+    public var metadata: Metadata
+    public var supportsOpacity: Bool
+    
+    public init(color: Binding<Color>, metadata: Metadata, supportsOpacity: Bool = false) {
+        self._color = color
+        self.metadata = metadata
+        self.supportsOpacity = supportsOpacity
+    }
+
+    public var body: some View {
+        SwiftUI.ColorPicker(selection: self.$color, supportsOpacity: self.supportsOpacity) {
+            MetadataLabel(self.metadata, value: self.$color)
+        }
+    }
+}
+
+extension Presentations {
+    public struct _ColorPicker: SwiftUIFieldPresenting {
+        public typealias Value = Color
+        public var supportsOpacity: Bool
+        
+        public init(supportsOpacity: Bool = false) {
+            self.supportsOpacity = supportsOpacity
+        }
+
+        public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+            ColorPickerView(color: binding.forSwiftUI, metadata: field, supportsOpacity: self.supportsOpacity).erased
+        }
+    }
+    
+    @available(iOS 15, macOS 12, *)
+    public struct _CGColorPicker: SwiftUIFieldPresenting {
+        public typealias Value = CGColor
+        public var supportsOpacity: Bool
+        
+        public init(supportsOpacity: Bool = false) {
+            self.supportsOpacity = supportsOpacity
+        }
+
+        public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+            let binding: any ValueBinding<Color> = binding.map { Color(cgColor: $0) } set: { $0.cgColor }
+            return ColorPickerView(color: binding.forSwiftUI, metadata: field, supportsOpacity: self.supportsOpacity).erased
+        }
+    }
+    
+    @available(iOS 15, macOS 12, *)
+    public struct _UIColorPicker: SwiftUIFieldPresenting {
+        public typealias Value = UIColor
+        public var supportsOpacity: Bool
+
+        public init(supportsOpacity: Bool = false) {
+            self.supportsOpacity = supportsOpacity
+        }
+
+        public func body(for field: Metadata, binding: some ValueBinding<Value>) -> AnyView {
+            let binding: any ValueBinding<Color> = binding.map {
+                Color(uiColor: $0)
+            } set: {
+                $0.cgColor.map(UIColor.init(cgColor:))
+            }
+            return ColorPickerView(color: binding.forSwiftUI, metadata: field, supportsOpacity: self.supportsOpacity).erased
+        }
+    }
+}
+
+extension FieldPresenting {
+    public static func picker(supportsOpacity: Bool = false) -> Self where Self == Presentations._ColorPicker {
+        .init(supportsOpacity: supportsOpacity)
+    }
+    
+    @available(iOS 15, macOS 12, *)
+    public static func picker(supportsOpacity: Bool = false) -> Self where Self == Presentations._CGColorPicker {
+        .init(supportsOpacity: supportsOpacity)
+    }
+    
+    @available(iOS 15, macOS 12, *)
+    public static func picker(supportsOpacity: Bool = false) -> Self where Self == Presentations._UIColorPicker {
+        .init(supportsOpacity: supportsOpacity)
+    }
+}
+
+extension Color: CustomFieldPresentable {
+    public static var preferredPresentation: some FieldPresenting<Self> { .picker() }
+}
